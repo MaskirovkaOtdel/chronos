@@ -1,0 +1,22 @@
+# Normalize to LF in the repo — cross-platform + CI consistency
+* text=auto eol=lf
+
+# Windows entry points must stay CRLF to execute
+*.cmd text eol=crlf
+*.bat text eol=crlf
+*.ps1 text eol=crlf
+
+# Never touch these
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.webp binary
+*.svg text
+*.woff2 binary
+*.woff binary
+*.ttf binary
+*.otf binary
+*.mp3 binary
+*.wav binary
