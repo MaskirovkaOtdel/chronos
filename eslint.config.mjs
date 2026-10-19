@@ -83,6 +83,26 @@ export default tseslint.config(
     },
   },
 
+  // Repo tooling. Plain .mjs never reaches the TypeScript plugin, so
+  // typescript-eslint does not get to disable `no-undef` for it the way it does
+  // for .ts — the globals have to be declared by hand. Listed explicitly rather
+  // than pulling in the `globals` package for two names.
+  //
+  // `console.log` is the deliverable of a CLI, not a stray debug statement,
+  // so the no-console rule is off for these files.
+  {
+    files: ['scripts/**/*.mjs'],
+    languageOptions: {
+      globals: {
+        console: 'readonly',
+        process: 'readonly',
+      },
+    },
+    rules: {
+      'no-console': 'off',
+    },
+  },
+
   // Keep last — it disables every rule Prettier would fight with.
   prettier,
 )

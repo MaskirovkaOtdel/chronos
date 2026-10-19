@@ -1,4 +1,5 @@
 @import 'tailwindcss';
+@import './theme/themes.css';
 
 /*
  * Tailwind v4 is CSS-first: `@theme` replaces tailwind.config.js.
@@ -24,36 +25,16 @@
 }
 
 /*
- * Warm — the house palette (plan §8). Two of the eight themes exist so far;
- * Meadow, Dusk and Sunrise arrive on day 7 alongside the contrast gate.
+ * All eight themes live in `./theme/themes.css` (4 palettes × 2 modes, §8).
  *
- * Light is the `:root` default so the app renders correctly before any
- * preference has been stored or any theme picker built.
+ * Warm is the house palette and the default: both of its modes are reachable
+ * with `data-mode` alone, so the app is correct before any preference is stored
+ * or any theme picker exists. The other three palettes are opt-in via
+ * `data-palette`.
+ *
+ * Contrast is not eyeballed here — `src/theme/contrast.test.ts` parses the
+ * theme file and computes WCAG ratios for every token pair in every theme.
  */
-:root {
-  --background: #fbf7f0;
-  --surface: #ffffff;
-  --surface-alt: #f4ede3;
-  --foreground: #292524;
-  --muted: #78716c;
-  --focus: #d97a55;
-  --short-break: #8aa88a;
-  --long-break: #a08fb0;
-  --success: #7a9b6e;
-}
-
-/* Warm Charcoal — never pure black; warm darks drift dim easily (§8). */
-:root[data-mode='dark'] {
-  --background: #1a1614;
-  --surface: #242019;
-  --surface-alt: #242019;
-  --foreground: #f5f0e8;
-  --muted: #a8a29e;
-  --focus: #e28b66;
-  --short-break: #9db79d;
-  --long-break: #b3a3c4;
-  --success: #8fae83;
-}
 
 @layer base {
   html {

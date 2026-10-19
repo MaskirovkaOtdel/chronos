@@ -18,6 +18,7 @@
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
+    "themes:derive": "node scripts/derive-themes.mjs",
     "prepare": "husky"
   },
   "lint-staged": {

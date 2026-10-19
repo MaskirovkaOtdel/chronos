@@ -1,0 +1,131 @@
+/*
+ * Theme tokens — 4 palettes × 2 modes = 8 (§8).
+ *
+ * LIGHT blocks are authored. DARK blocks are DERIVED from them by
+ * `scripts/derive-themes.mjs` — hue and chroma held, lightness shifted to a
+ * per-role target shared by all four palettes. Do not hand-edit a dark block:
+ * edit the light block and re-run `pnpm themes:derive`.
+ *
+ * `--surface` is deliberately a tinted white rather than #ffffff. Achromatic
+ * tokens have no hue to hold, so deriving dark from pure white produced a
+ * neutral #181818 surface in every palette and the darks lost their character.
+ *
+ * `contrast.test.ts` parses this file and computes WCAG ratios for every token
+ * pair in every theme, so nothing here ships unchecked.
+ */
+
+:root,
+[data-palette='warm'][data-mode='light'] {
+  /*
+   * Warm — the house palette (§8).
+   *
+   * Five tokens are darkened from the §8 table. The contrast gate found the
+   * tabulated values failing the plan's own thresholds: muted missed 4.5:1 by
+   * 0.01, and all four role colours missed 3:1 on the darker light surfaces.
+   * §8 assumed clay was "≈3:1"; it measures 2.86:1. Each replacement is the
+   * least darkening that clears its threshold with hue and chroma held — the
+   * same OKLCH rule used to derive dark mode, so the palette keeps its
+   * character rather than being re-designed by hand.
+   */
+  --background: #fbf7f0;
+  --surface: #fffcf7;
+  --surface-alt: #f4ede3;
+  --foreground: #292524;
+  --muted: #726b66;
+  --focus: #cd6f4a;
+  --short-break: #728f72;
+  --long-break: #9281a2;
+  --success: #719265;
+}
+
+:root[data-mode='dark'],
+[data-palette='warm'][data-mode='dark'] {
+  /* derived from 'warm' light via OKLCH — h/c held, l shifted */
+  --background: #181611;
+  --surface: #1f1d19;
+  --surface-alt: #2b261e;
+  --foreground: #f3edec;
+  --muted: #aaa39e;
+  --focus: #eb8a65;
+  --short-break: #93b193;
+  --long-break: #baa9cb;
+  --success: #94b688;
+}
+
+[data-palette='meadow'][data-mode='light'] {
+  /* Meadow — green, growing, daylight through leaves. */
+  --background: #f4f8f1;
+  --surface: #fcfefb;
+  --surface-alt: #e9f1e5;
+  --foreground: #21291d;
+  --muted: #5a6552;
+  --focus: #3f7d4b;
+  --short-break: #5d8cb8;
+  --long-break: #8a76ad;
+  --success: #4c8a44;
+}
+
+[data-palette='meadow'][data-mode='dark'] {
+  /* derived from 'meadow' light via OKLCH — h/c held, l shifted */
+  --background: #141712;
+  --surface: #1c1d1b;
+  --surface-alt: #232920;
+  --foreground: #e8f3e2;
+  --muted: #9da994;
+  --focus: #7ab984;
+  --short-break: #7dadda;
+  --long-break: #baa5df;
+  --success: #7ebe75;
+}
+
+[data-palette='dusk'][data-mode='light'] {
+  /* Dusk — the violet that arrives just before the lamps come on. */
+  --background: #f6f5fa;
+  --surface: #fcfbff;
+  --surface-alt: #eeecf5;
+  --foreground: #252130;
+  --muted: #5f5a72;
+  --focus: #6a5cae;
+  --short-break: #4a86ae;
+  --long-break: #8b5f9e;
+  --success: #4a8460;
+}
+
+[data-palette='dusk'][data-mode='dark'] {
+  /* derived from 'dusk' light via OKLCH — h/c held, l shifted */
+  --background: #161519;
+  --surface: #1d1c1f;
+  --surface-alt: #27252c;
+  --foreground: #f0ebff;
+  --muted: #a6a0bb;
+  --focus: #a69af1;
+  --short-break: #73afd9;
+  --long-break: #cb9ce0;
+  --success: #7fbb94;
+}
+
+[data-palette='sunrise'][data-mode='light'] {
+  /* Sunrise — peach and gold, the first light on a warm wall. */
+  --background: #fff7f0;
+  --surface: #fffaf5;
+  --surface-alt: #fbeee2;
+  --foreground: #2b241f;
+  --muted: #6f6255;
+  --focus: #c4703a;
+  --short-break: #5d8cad;
+  --long-break: #8a6ba0;
+  --success: #4e8a55;
+}
+
+[data-palette='sunrise'][data-mode='dark'] {
+  /* derived from 'sunrise' light via OKLCH — h/c held, l shifted */
+  --background: #1a1510;
+  --surface: #201c19;
+  --surface-alt: #2e241b;
+  --foreground: #f6ece6;
+  --muted: #b0a294;
+  --focus: #e68f5a;
+  --short-break: #7eaed1;
+  --long-break: #c2a2da;
+  --success: #7fbc85;
+}
