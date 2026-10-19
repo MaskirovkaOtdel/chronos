@@ -1,0 +1,37 @@
+# dependencies
+node_modules/
+.pnpm-store/
+
+# builds
+dist/
+build/
+out/
+.turbo/
+*.tsbuildinfo
+
+# environment — .env.example is deliberately committed (public-repo hygiene, §11)
+.env
+.env.*
+!.env.example
+
+# logs
+*.log
+logs/
+npm-debug.log*
+pnpm-debug.log*
+
+# test output
+coverage/
+.vitest/
+
+# editors
+.vscode/*
+!.vscode/extensions.json
+.idea/
+
+# os
+.DS_Store
+Thumbs.db
+
+# local-only
+*.local
