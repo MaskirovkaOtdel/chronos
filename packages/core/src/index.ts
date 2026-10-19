@@ -11,6 +11,7 @@
 
 // Domain
 export type { SegmentKind, FocusSession, PersistedTimerState } from './session.js'
+export { elapsedMs } from './elapsed.js'
 
 // Ports
 export type { Clock } from './clock.js'
