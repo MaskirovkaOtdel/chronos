@@ -1,0 +1,16 @@
+{
+  "printWidth": 100,
+  "singleQuote": true,
+  "semi": false,
+  "trailingComma": "all",
+  "tabWidth": 2,
+  "endOfLine": "lf",
+  "bracketSpacing": true,
+  "arrowParens": "always",
+  "overrides": [
+    {
+      "files": ["*.md", "*.json"],
+      "options": { "printWidth": 80 }
+    }
+  ]
+}

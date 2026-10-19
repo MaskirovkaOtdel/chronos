@@ -1,0 +1,17 @@
+# build output
+**/dist/**
+**/build/**
+**/.turbo/**
+**/coverage/**
+
+# dependencies
+**/node_modules/**
+
+# lockfiles and generated files — formatting these creates noise, not value
+pnpm-lock.yaml
+*.tsbuildinfo
+
+# assets that are already byte-exact
+**/*.svg
+**/*.png
+**/*.ico

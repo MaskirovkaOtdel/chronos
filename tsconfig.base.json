@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "display": "CHRONOS — strict base for every package",
+  "compilerOptions": {
+    /* Emit — ES2023 is safe everywhere CHRONOS runs: evergreen browsers,
+       Node 26, Tauri's WKWebView/WebKitGTK, Capacitor's WKWebView/Chromium. */
+    "target": "ES2023",
+    "lib": ["ES2023"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "moduleDetection": "force",
+
+    /* Strictness. These are day-two decisions on purpose — retrofitting
+       noUncheckedIndexedAccess later is a miserable multi-day refactor. */
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "noImplicitOverride": true,
+    "noFallthroughCasesInSwitch": true,
+    "noPropertyAccessFromIndexSignature": true,
+    "allowUnreachableCode": false,
+    "allowUnusedLabels": false,
+
+    /* ESM hygiene */
+    "isolatedModules": true,
+    "verbatimModuleSyntax": true,
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+
+    /* No ambient @types are loaded unless a package opts in.
+       This is structural enforcement of "core has zero I/O" — a package that
+       reaches for `window` or `process` fails to compile rather than
+       quietly working until it breaks the CLI or Tauri shell. */
+    "types": [],
+
+    /* Project references */
+    "composite": true,
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "incremental": true
+  }
+}
