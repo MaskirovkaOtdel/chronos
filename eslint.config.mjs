@@ -49,6 +49,13 @@ export default tseslint.config(
         },
       ],
       '@typescript-eslint/no-redundant-type-constituents': 'error',
+      // OFF deliberately. Our ports are async because their real adapters
+      // (localStorage, Firestore, Notification, AudioContext) are — but the
+      // in-memory and no-op adapters implement them synchronously, which is
+      // exactly what this rule forbids. The bug it guards against, a promise
+      // built and dropped, is still caught by `no-floating-promises`, which
+      // stays on and is part of the type-checked set above.
+      '@typescript-eslint/require-await': 'off',
     },
   },
 

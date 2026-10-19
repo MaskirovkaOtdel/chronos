@@ -1,0 +1,7 @@
+{
+  // Solution-style root project: it compiles nothing itself and exists so
+  // `tsc -b` at the repo root builds every package in dependency order.
+  // Packages are added here as they are created.
+  "files": [],
+  "references": [{ "path": "./packages/core" }]
+}

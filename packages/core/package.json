@@ -1,0 +1,24 @@
+{
+  "name": "@chronos/core",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Domain logic and port contracts for CHRONOS. Zero I/O — no React, no localStorage, no fetch.",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./testing": {
+      "types": "./dist/testing/index.d.ts",
+      "default": "./dist/testing/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -b",
+    "clean": "tsc -b --clean"
+  }
+}
