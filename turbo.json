@@ -18,6 +18,11 @@
       "outputs": []
     },
     "dev": {
+      // A dev server needs its dependencies' dist on disk before it can serve
+      // them, so upstream packages are built once up front. After that the
+      // server owns its own graph — core edits during `turbo dev` are not
+      // watched yet.
+      "dependsOn": ["^build"],
       "cache": false,
       "persistent": true
     },

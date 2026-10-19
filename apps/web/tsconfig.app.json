@@ -1,0 +1,33 @@
+{
+  // Extends the shared base so `noUncheckedIndexedAccess`,
+  // `exactOptionalPropertyTypes` and `noPropertyAccessFromIndexSignature`
+  // cannot drift between the app and the libraries. The overrides below exist
+  // because a base configured for composable libraries is wrong for an app:
+  // `composite`/`declaration` describe a project other projects reference,
+  // and an application is never referenced by anything.
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "composite": false,
+    "declaration": false,
+    // Without `declaration`, declaration maps are meaningless and TS rejects
+    // them — they must be turned off together.
+    "declarationMap": false,
+    "noEmit": true,
+    "sourceMap": false,
+
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.app.tsbuildinfo",
+
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "types": ["vite/client"],
+    "jsx": "react-jsx",
+
+    /* Vite resolves `.ts`/`.tsx` specifiers directly at build time. */
+    "allowArbitraryExtensions": true,
+    "allowImportingTsExtensions": true,
+
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "erasableSyntaxOnly": true
+  },
+  "include": ["src"]
+}

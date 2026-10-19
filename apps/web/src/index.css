@@ -1,0 +1,82 @@
+@import 'tailwindcss';
+
+/*
+ * Tailwind v4 is CSS-first: `@theme` replaces tailwind.config.js.
+ *
+ * `inline` is load-bearing. Without it Tailwind emits
+ * `--color-background: var(--background)` into `:root` and generates utilities
+ * referencing `--color-background`; the substitution would resolve once at the
+ * root and inherit as a fixed value. With `inline`, utilities reference
+ * `--background` directly, so they track the active scope — which is what
+ * makes a theme switch work anywhere on the tree rather than only when the
+ * attribute happens to sit on `<html>`.
+ */
+@theme inline {
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-surface-alt: var(--surface-alt);
+  --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-focus: var(--focus);
+  --color-short-break: var(--short-break);
+  --color-long-break: var(--long-break);
+  --color-success: var(--success);
+}
+
+/*
+ * Warm — the house palette (plan §8). Two of the eight themes exist so far;
+ * Meadow, Dusk and Sunrise arrive on day 7 alongside the contrast gate.
+ *
+ * Light is the `:root` default so the app renders correctly before any
+ * preference has been stored or any theme picker built.
+ */
+:root {
+  --background: #fbf7f0;
+  --surface: #ffffff;
+  --surface-alt: #f4ede3;
+  --foreground: #292524;
+  --muted: #78716c;
+  --focus: #d97a55;
+  --short-break: #8aa88a;
+  --long-break: #a08fb0;
+  --success: #7a9b6e;
+}
+
+/* Warm Charcoal — never pure black; warm darks drift dim easily (§8). */
+:root[data-mode='dark'] {
+  --background: #1a1614;
+  --surface: #242019;
+  --surface-alt: #242019;
+  --foreground: #f5f0e8;
+  --muted: #a8a29e;
+  --focus: #e28b66;
+  --short-break: #9db79d;
+  --long-break: #b3a3c4;
+  --success: #8fae83;
+}
+
+@layer base {
+  html {
+    background-color: var(--background);
+    color: var(--foreground);
+  }
+
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background-color: var(--background);
+    color: var(--foreground);
+    /*
+     * Intentionally a system stack. Day 6 is the Fraunces spike with a binary
+     * go/no-go on tabular numerals; committing to a font before that gate
+     * passes is the mistake the gate exists to prevent.
+     */
+    font-family:
+      ui-sans-serif,
+      system-ui,
+      -apple-system,
+      'Segoe UI',
+      Roboto,
+      sans-serif;
+  }
+}
