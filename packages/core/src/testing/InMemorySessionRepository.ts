@@ -1,4 +1,4 @@
-import type { FocusSession } from '../session.js'
+import type { FocusSession, PersistedTimerState } from '../session.js'
 import type { SessionListOptions, SessionRepository } from '../repository.js'
 
 /**
@@ -28,24 +28,34 @@ function compareIds(a: string, b: string): number {
  * - The stored copy is `Object.freeze`d, so a stray mutation inside a test fails
  *   loudly instead of corrupting state that a later assertion reads.
  *
- * `FocusSession` is a flat record of primitives, so a shallow copy is a full
- * copy. If a nested object is ever added to the type, both of these need to
- * become deep.
+ * Both apply to the active document too, and there the copy has to reach one
+ * level down: `PersistedTimerState` is flat, but it *points at* a
+ * `FocusSession`. Copying only the outer record would leave the stored state
+ * aliasing the caller's session, so mutating `state.activeSession` after
+ * `saveState` would edit a document that was supposed to be written. The
+ * session is therefore copied and frozen alongside the state it sits in.
  */
 export class InMemorySessionRepository implements SessionRepository {
-  #active: FocusSession | null = null
+  #state: PersistedTimerState | null = null
   readonly #sessions = new Map<string, FocusSession>()
 
-  async getActive(): Promise<FocusSession | null> {
-    return this.#active
+  /**
+   * `null` only until the first `saveState` — afterwards a written document
+   * that goes idle comes back as `activeSession: null`, not top-level `null`.
+   * The two are deliberately distinguishable, exactly as the contract requires.
+   */
+  async loadState(): Promise<PersistedTimerState | null> {
+    return this.#state
   }
 
-  async saveActive(session: FocusSession): Promise<void> {
-    this.#active = Object.freeze({ ...session })
+  async saveState(state: PersistedTimerState): Promise<void> {
+    this.#state = Object.freeze(this.#copyState(state))
   }
 
-  async clearActive(): Promise<void> {
-    this.#active = null
+  #copyState(state: PersistedTimerState): PersistedTimerState {
+    const activeSession =
+      state.activeSession === null ? null : Object.freeze({ ...state.activeSession })
+    return { ...state, activeSession }
   }
 
   async list(options?: SessionListOptions): Promise<FocusSession[]> {

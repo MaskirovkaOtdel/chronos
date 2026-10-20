@@ -176,12 +176,27 @@ every time the tab closes.
 > session completed without the counter moving, or a counter moved while the active session still
 > looks live — and no reconciliation rule can tell which half is right.
 >
-> **Open question, to be settled in phase 2** when `createTimer({ clock, repository, notifier })`
-> lands: `SessionRepository` owns the active slot but knows nothing of cycle position, so _something_
-> must own the whole document as a single writer. Candidates are extending `SessionRepository` with
-> cycle-state accessors, or adding a `TimerStateRepository` port over the same document with
-> `SessionRepository`'s active methods delegating to it. **Two independent writers of one document
-> is not an acceptable answer** — that is the bug this whole section exists to prevent.
+> **Resolved (week 3, before phase 2): `SessionRepository` writes the whole document.**
+> `getActive`/`saveActive`/`clearActive` were **replaced** by `loadState(): Promise<PersistedTimerState | null>`
+> and `saveState(state: PersistedTimerState): Promise<void>` — one transition, one call.
+>
+> Two candidates were considered and rejected:
+>
+> - _Extending `SessionRepository` with cycle-state accessors._ Leaves two writes per transition,
+>   so the crash window this section exists to prevent survives untouched.
+> - _Adding a `TimerStateRepository` port, with `SessionRepository`'s active methods delegating to
+>   it._ Two ports over one document: whichever is called first wins the ordering, and delegation
+>   only hides the race rather than removing it.
+>
+> The whole-document shape also happens to be the cheapest moment to choose it — at week 3
+> `SessionRepository` had no consumer beyond its in-memory double, and after phase 4's localStorage
+> and Firestore adapters exist the same change would ripple through three implementations instead
+> of one.
+>
+> `loadState()` returns `null` **only before the first write**. That is distinct from
+> `activeSession: null`, which means idle with cycle position already persisted — so core never has
+> to invent a default `currentPresetId` to answer "nothing stored", which is precisely the reason
+> presets stay a phase 2 domain concept rather than leaking into the persistence layer.
 
 ## Settings (designed, not specified)
 
