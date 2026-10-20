@@ -36,6 +36,18 @@ export {
 } from './notifications.js'
 export type { NotificationContext } from './notifications.js'
 
+// Statistics
+export {
+  dayKey,
+  hourOfDay,
+  dayFraction,
+  dayLengthMs,
+  summary,
+  streaks,
+  ribbonForDay,
+} from './stats/index.js'
+export type { StatsSummary, StreakInfo, RibbonSegment } from './stats/index.js'
+
 // Ports
 export type { Clock } from './clock.js'
 export type { SessionRepository, SessionListOptions } from './repository.js'
