@@ -27,6 +27,14 @@ export { PRESETS, FOCUS_25, SHORT_BREAK, LONG_BREAK, findPreset } from './preset
 export type { Preset, FocusPreset, BreakPreset, AnyPreset } from './presets.js'
 export { nextSegmentAfterFinish } from './cycle.js'
 export type { NextSegment } from './cycle.js'
+export {
+  notificationFor,
+  shouldAskForPermission,
+  SESSION_NOTIFICATION_TAG,
+  EXTEND_FIVE_MINUTES,
+  SKIP_TO_BREAK,
+} from './notifications.js'
+export type { NotificationContext } from './notifications.js'
 
 // Ports
 export type { Clock } from './clock.js'

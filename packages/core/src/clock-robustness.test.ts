@@ -5,7 +5,7 @@ import { createTimer } from './timer.js'
 import { elapsedMs } from './elapsed.js'
 import { InMemorySessionRepository } from './testing/InMemorySessionRepository.js'
 import { ManualClock } from './testing/ManualClock.js'
-import { stubNotifier } from './testing/stubNotifier.js'
+import { FakeNotifier } from './testing/FakeNotifier.js'
 
 const FOCUS_25 = { id: 's1', presetId: 'focus-25' }
 
@@ -15,7 +15,7 @@ const HOUR = 60 * MINUTE
 function makeTimer(startAt = 0) {
   const clock = new ManualClock(startAt)
   const repository = new InMemorySessionRepository()
-  const timer = createTimer({ clock, repository, notifier: stubNotifier })
+  const timer = createTimer({ clock, repository, notifier: new FakeNotifier() })
   return { clock, timer, repository }
 }
 

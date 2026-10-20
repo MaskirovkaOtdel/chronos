@@ -7,7 +7,7 @@ import { InMemorySessionRepository } from './testing/InMemorySessionRepository.j
 import { ManualClock } from './testing/ManualClock.js'
 import type { Mutable } from './testing/fixtures.js'
 import { makeFocusSession, makePersistedTimerState } from './testing/fixtures.js'
-import { stubNotifier } from './testing/stubNotifier.js'
+import { FakeNotifier } from './testing/FakeNotifier.js'
 
 const FOCUS_25: SegmentSpec = {
   id: 's1',
@@ -41,7 +41,7 @@ function makeTimer(startAt = 0) {
   const timer = createTimer({
     clock,
     repository,
-    notifier: stubNotifier,
+    notifier: new FakeNotifier(),
   })
   return { clock, timer, repository }
 }

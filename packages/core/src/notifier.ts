@@ -1,3 +1,16 @@
+/**
+ * An action the user can take straight from the notification.
+ *
+ * The web's `Notification` constructor cannot carry actions — that needs a
+ * service worker — so this is the *policy's* description of what the user is
+ * being offered, and the adapter decides what it can actually render. The ids
+ * are domain strings; the policy that produces them is what names them.
+ */
+export interface NotificationAction {
+  readonly id: string
+  readonly label: string
+}
+
 /** Content of a single notification. */
 export interface NotificationRequest {
   readonly title: string
@@ -10,6 +23,8 @@ export interface NotificationRequest {
    * done" stays a single, current fact.
    */
   readonly tag: string
+  /** What the user may do with it. Omitted when there is nothing to offer. */
+  readonly actions?: readonly NotificationAction[]
 }
 
 export type NotificationPermissionState = 'default' | 'granted' | 'denied'

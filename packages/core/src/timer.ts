@@ -3,6 +3,7 @@ import type { Notifier } from './notifier.js'
 import type { SessionRepository } from './repository.js'
 import type { FocusSession, PersistedTimerState, SegmentKind } from './session.js'
 import { elapsedMs } from './elapsed.js'
+import { notificationFor } from './notifications.js'
 import { nextSegmentAfterFinish } from './cycle.js'
 import { FOCUS_25, findPreset } from './presets.js'
 import type { FocusPreset } from './presets.js'
@@ -111,10 +112,9 @@ export interface SegmentSpec {
 /**
  * Everything the timer asks of the outside world.
  *
- * `clock` and `repository` are read. `notifier` is accepted because the plan
- * fixes this signature and day 7 activates it — the public shape stays put
- * while the behaviour underneath grows into it, instead of being widened
- * under its callers again.
+ * All three are read. The notifier carries the finished segment's message —
+ * the *policy* for what to say is pure and lives in `notifications.ts`; this
+ * only delivers it.
  */
 export interface TimerDeps {
   readonly clock: Clock
@@ -173,6 +173,16 @@ export interface Timer {
   skip(): Promise<FocusSession>
 
   /**
+   * Extends a finished segment and resumes it — the notification's *"Extend
+   * 5m"* action.
+   *
+   * The plan: *"Extend 5m (adds to `plannedDurationMs`, resumes)"*. The work
+   * already done is untouched; only the target grows, and the segment becomes
+   * live again.
+   */
+  extend(finished: FocusSession, extraMs: number): Promise<void>
+
+  /**
    * Reconciles a persisted state into this timer, as the app starts up.
    *
    * The reconciliation follows the plan's rules exactly:
@@ -229,7 +239,7 @@ function phaseOf(session: FocusSession | null): TimerPhase {
  * before its write landed would be a transition that had not happened yet.
  */
 export function createTimer(deps: TimerDeps): Timer {
-  const { clock, repository } = deps
+  const { clock, repository, notifier } = deps
 
   let session: FocusSession | null = null
   let focusCount = 0
@@ -372,6 +382,26 @@ export function createTimer(deps: TimerDeps): Timer {
   }
 
   /**
+   * Announces a finished segment, if the platform should hear about it.
+   *
+   * The *policy* — what to say, and whether to say it — is pure and lives in
+   * `notifications.ts`; this is only the delivery. A refused permission or a
+   * platform with no notification API produces nothing, and that is an
+   * ordinary outcome rather than a failure: the redundancy ladder's other
+   * channels still reach the user.
+   */
+  async function announce(finished: FocusSession, whileAway: boolean): Promise<void> {
+    const notification = notificationFor(finished, {
+      supported: notifier.supported,
+      permission: notifier.permission,
+      whileAway,
+    })
+
+    if (notification === null) return
+    await notifier.notify(notification)
+  }
+
+  /**
    * Ends the session and hands back the finished record.
    *
    * `actualMs` is the elapsed time at the instant it ended, **capped at the
@@ -432,7 +462,46 @@ export function createTimer(deps: TimerDeps): Timer {
     await file(finished)
     advanceCycle(finished.kind)
     await persist()
+    await announce(finished, false)
     return finished
+  }
+
+  /**
+   * Extends a finished segment and resumes it — the notification's *"Extend
+   * 5m"* action.
+   *
+   * The plan: *"Extend 5m (adds to `plannedDurationMs`, resumes)"*. The work
+   * already done is untouched: the segment started when it started and the
+   * pauses it took are still the pauses it took. Only the target grows, and
+   * the segment becomes live again.
+   *
+   * Two things are undone, because the segment has **not** concluded after
+   * all: the completion's cycle advance (it must not have consumed a slot)
+   * and its place in the history (a running segment is not a finished one).
+   */
+  async function extend(finished: FocusSession, extraMs: number): Promise<void> {
+    if (session !== null) {
+      throw new Error('extend() refused: a segment is already running')
+    }
+    if (!Number.isFinite(extraMs) || extraMs <= 0) {
+      throw new Error('extend() refused: the extension must be a positive number of milliseconds')
+    }
+
+    if (finished.kind === 'focus' && focusCount > 0) {
+      focusCount -= 1
+    }
+    currentPresetId = finished.presetId
+    await repository.delete(finished.id)
+
+    session = Object.freeze({
+      ...finished,
+      plannedDurationMs: finished.plannedDurationMs + extraMs,
+      endedAt: null,
+      actualMs: null,
+      completed: false,
+    })
+
+    await persist()
   }
 
   /**
@@ -542,11 +611,12 @@ export function createTimer(deps: TimerDeps): Timer {
     await file(finished)
     advanceCycle(finished.kind)
     await persist()
+    await announce(finished, true)
 
     return { resumed: null, completedWhileAway: finished }
   }
 
-  return { getState, start, pause, resume, tick, endEarly, skip, restore }
+  return { getState, start, pause, resume, tick, endEarly, skip, extend, restore }
 }
 
 /**
