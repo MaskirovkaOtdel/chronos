@@ -10,9 +10,15 @@ import type { Mutable } from './testing/fixtures.js'
 
 const FOCUS_25: SegmentSpec = {
   id: 's1',
-  kind: 'focus',
   presetId: 'focus-25',
-  plannedDurationMs: 25 * 60 * 1000,
+}
+
+/** The state of a timer that has never run anything. */
+const IDLE = {
+  phase: 'idle',
+  session: null,
+  completedFocusCount: 0,
+  currentPresetId: 'focus-25',
 }
 
 /**
@@ -64,7 +70,7 @@ describe('createTimer — the transition table', () => {
     it('idle → running: builds the segment from the clock and the spec', () => {
       const { timer } = makeTimer(1_000)
 
-      expect(timer.getState()).toEqual({ phase: 'idle', session: null })
+      expect(timer.getState()).toEqual(IDLE)
 
       timer.start(FOCUS_25)
 
@@ -148,7 +154,7 @@ describe('createTimer — the transition table', () => {
       expect(() => timer.pause()).toThrow('pause() refused: there is no segment running')
       expect(() => timer.resume()).toThrow('resume() refused: there is no segment paused')
 
-      expect(timer.getState()).toEqual({ phase: 'idle', session: null })
+      expect(timer.getState()).toEqual(IDLE)
     })
 
     it('refuses start() and resume() while running, leaving the session in place', () => {
@@ -183,16 +189,93 @@ describe('createTimer — the transition table', () => {
   })
 
   describe('a spec the domain does not admit', () => {
-    it('refuses a planned duration that is not a positive, finite number', () => {
+    it('refuses a preset that does not exist', () => {
       const { timer } = makeTimer(1_000)
 
-      for (const plannedDurationMs of [0, -1, Number.NaN, Number.POSITIVE_INFINITY]) {
-        expect(() => timer.start({ ...FOCUS_25, plannedDurationMs })).toThrow(
-          'start() refused: plannedDurationMs must be a positive, finite number',
-        )
+      expect(() => timer.start({ ...FOCUS_25, presetId: 'focus-50' })).toThrow(
+        'start() refused: no preset named "focus-50"',
+      )
+
+      expect(timer.getState()).toEqual(IDLE)
+    })
+  })
+
+  describe('completion', () => {
+    it('completes a session that has reached its planned duration', () => {
+      const { clock, timer } = makeTimer(1_000)
+      timer.start(FOCUS_25)
+      clock.advance(25 * 60 * 1000)
+
+      const finished = timer.tick()
+
+      expect(finished?.endedAt).toBe(1_000 + 25 * 60 * 1000)
+      expect(finished?.actualMs).toBe(25 * 60 * 1000)
+      expect(finished?.completed).toBe(true)
+      expect(finished?.kind).toBe('focus')
+    })
+
+    it('does not complete before the planned duration', () => {
+      const { clock, timer } = makeTimer(1_000)
+      timer.start(FOCUS_25)
+      clock.advance(25 * 60 * 1000 - 1)
+
+      expect(timer.tick()).toBeNull()
+      expect(timer.getState().phase).toBe('running')
+    })
+
+    it('does not complete a paused session that is still short of the plan', () => {
+      const { clock, timer } = makeTimer(1_000)
+      timer.start(FOCUS_25)
+      clock.advance(60_000)
+      timer.pause()
+      clock.advance(8 * 60 * 60 * 1000) // a night passes, paused
+
+      expect(timer.tick()).toBeNull()
+      expect(timer.getState().phase).toBe('paused')
+    })
+
+    it('returns to idle and records what comes next', () => {
+      const { clock, timer } = makeTimer(1_000)
+      timer.start(FOCUS_25)
+      clock.advance(25 * 60 * 1000)
+      timer.tick()
+
+      const state = timer.getState()
+      expect(state.phase).toBe('idle')
+      expect(state.session).toBeNull()
+      expect(state.completedFocusCount).toBe(1)
+      expect(state.currentPresetId).toBe('short-break-5')
+    })
+
+    it('earns the long break on the focus that completes the cadence', () => {
+      const { clock, timer } = makeTimer(1_000)
+      const breaks: string[] = []
+
+      for (let i = 0; i < 4; i += 1) {
+        timer.start({ ...FOCUS_25, id: `s${i}` })
+        clock.advance(25 * 60 * 1000)
+        timer.tick()
+        breaks.push(timer.getState().currentPresetId)
       }
 
-      expect(timer.getState()).toEqual({ phase: 'idle', session: null })
+      expect(breaks).toEqual(['short-break-5', 'short-break-5', 'short-break-5', 'long-break-15'])
+      expect(timer.getState().completedFocusCount).toBe(4)
+    })
+
+    it('counts breaks not at all, and follows a break with a focus', () => {
+      const { clock, timer } = makeTimer(1_000)
+      timer.start({ id: 'b1', presetId: 'short-break-5' })
+      clock.advance(5 * 60 * 1000)
+      timer.tick()
+
+      expect(timer.getState().completedFocusCount).toBe(0)
+      expect(timer.getState().currentPresetId).toBe('focus-25')
+    })
+
+    it('completes nothing when there is nothing running', () => {
+      const { timer } = makeTimer(1_000)
+
+      expect(timer.tick()).toBeNull()
     })
   })
 
