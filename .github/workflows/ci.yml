@@ -1,0 +1,64 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# Read-only token. This repository is public and nothing in CI writes to it;
+# a write-capable token here would be an unnecessary attack surface.
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gate:
+    name: ${{ matrix.task }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      # Each gate is reported independently, so a red typecheck can never mask
+      # a failing contrast test. `fail-fast: false` is the whole point: on a
+      # broken PR you want to see every gate's verdict at once, not the first.
+      fail-fast: false
+      matrix:
+        task:
+          - lint
+          - typecheck
+          - test
+          - format:check
+          - build
+    env:
+      # Git hooks only matter when committing locally — lint-staged runs on
+      # commit and never in CI, so installing hooks here is pure overhead.
+      HUSKY: '0'
+    steps:
+      - uses: actions/checkout@v6
+
+      # `.nvmrc` is the single source of truth for the Node version. It agrees
+      # with `engines.node` and with the local toolchain (v26.8.1), so CI runs
+      # the same runtime the gates are verified against locally.
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+
+      # The pnpm version comes from `packageManager` in package.json rather
+      # than being repeated here. Caching uses this action's own `cache` input
+      # instead of setup-node's `cache: pnpm`, keeping dependency caching in
+      # one action — the two have a documented history of conflicting.
+      - uses: pnpm/action-setup@v5
+        with:
+          cache: true
+
+      # `--frozen-lockfile` is what makes CI *verify* the lockfile rather than
+      # quietly rewrite it: a dependency change that was not committed fails
+      # here instead of drifting.
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run ${{ matrix.task }}
+        run: pnpm run ${{ matrix.task }}
