@@ -1,9 +1,9 @@
 import type { Clock } from './clock.js'
 import type { Notifier } from './notifier.js'
 import type { SessionRepository } from './repository.js'
-import type { FocusSession } from './session.js'
+import type { FocusSession, SegmentKind } from './session.js'
 import { elapsedMs } from './elapsed.js'
-import { nextSegmentAfterCompletion } from './cycle.js'
+import { nextSegmentAfterFinish } from './cycle.js'
 import { FOCUS_25, findPreset } from './presets.js'
 import type { FocusPreset } from './presets.js'
 
@@ -41,13 +41,16 @@ export interface TimerState {
    */
   readonly session: FocusSession | null
   /**
-   * Focus sessions completed so far — the cycle position.
+   * Focus sessions that have run to a conclusion — the cycle position.
    *
-   * This is the reason the state has to persist at all: without it the
-   * long-break cadence restarts every time the tab closes. Breaks do not
-   * advance it.
+   * A focus consumes a slot whether it was completed or ended early, because
+   * the cycle is a rhythm of focuses *run*. Whether a focus reached its plan
+   * is answered per session by `FocusSession.completed`, and the statistics
+   * read the history for that. This count answers only "where in the cycle
+   * are we" — and it has to persist, or the long-break cadence resets every
+   * time the tab closes.
    */
-  readonly completedFocusCount: number
+  readonly focusCount: number
   /**
    * The preset in force.
    *
@@ -92,7 +95,7 @@ export interface SegmentSpec {
 /**
  * Everything the timer asks of the outside world.
  *
- * Only `clock` is read on day 2. `repository` and `notifier` are accepted now
+ * Only `clock` is read so far. `repository` and `notifier` are accepted now
  * because the plan fixes this signature and days 5 and 7 activate them — the
  * public shape stays put while the behaviour underneath grows into it, instead
  * of being widened under callers three times.
@@ -129,6 +132,24 @@ export interface Timer {
    * `null` when nothing completed.
    */
   tick(): FocusSession | null
+
+  /**
+   * Ends the running segment now, as a **partial**, and hands it back.
+   *
+   * The record is honest: it says the segment ran for however long it ran and
+   * that it did not reach its plan. The focus still consumes its cycle slot
+   * — it ran — but *what comes next* is the caller's choice here, so the
+   * cycle is not consulted.
+   */
+  endEarly(): FocusSession
+
+  /**
+   * Ends the running segment as a partial **and moves the cycle on**, so the
+   * state names the segment to run next.
+   *
+   * The caller starts it — with an id of its own, since core cannot mint one.
+   */
+  skip(): FocusSession
 }
 
 /** Reads the phase off a session; `null` (no session) is `idle`. */
@@ -150,7 +171,7 @@ export function createTimer(deps: TimerDeps): Timer {
   const { clock } = deps
 
   let session: FocusSession | null = null
-  let completedFocusCount = 0
+  let focusCount = 0
 
   /**
    * The preset of the segment to run next.
@@ -178,7 +199,7 @@ export function createTimer(deps: TimerDeps): Timer {
     return {
       phase: phaseOf(session),
       session,
-      completedFocusCount,
+      focusCount,
       currentPresetId,
     }
   }
@@ -261,35 +282,96 @@ export function createTimer(deps: TimerDeps): Timer {
   }
 
   /**
-   * Ends the session as completed and hands back the finished record.
+   * Ends the session and hands back the finished record.
    *
-   * `actualMs` is the elapsed time at the instant of completion, *not* the
-   * planned duration: a segment that overran really did run longer, and day 4
-   * decides what a completion is allowed to record about that.
+   * `actualMs` is the elapsed time at the instant it ended, **capped at the
+   * planned duration**. The cap is a rule, not a rounding: a segment is 25
+   * minutes long, and running two minutes over is a grace period rather than
+   * two minutes of credit. The live elapsed time is *not* capped — that is how
+   * the overrun is detected at all — so the overrun is still visible on the
+   * countdown while the record says what the segment was worth.
    */
-  function complete(): FocusSession {
+  function finish(completed: boolean, action: string): FocusSession {
     if (session === null) {
-      throw new Error('complete() refused: there is no segment running')
+      throw new Error(`${action}() refused: there is no segment running`)
     }
 
     const now = clock.now()
     const finished = Object.freeze({
       ...session,
       endedAt: now,
-      actualMs: elapsedMs(session, now),
-      completed: true,
+      actualMs: Math.min(elapsedMs(session, now), session.plannedDurationMs),
+      completed,
     })
 
-    if (finished.kind === 'focus') {
-      completedFocusCount += 1
-    }
-
-    // The cycle decides what comes next, and the state records it — so a
-    // reloaded app knows to offer the break rather than another focus.
-    const next = nextSegmentAfterCompletion(finished.kind, completedFocusCount, focusPreset)
-    currentPresetId = next.presetId
-
     session = null
+    return finished
+  }
+
+  /**
+   * Consumes a cycle slot for a focus that has reached a conclusion.
+   *
+   * The slot is used whether the focus was completed or ended early: the
+   * cycle is a rhythm of focuses *run*, and the long break follows every
+   * fourth one. Whether the focus actually reached its plan is a different
+   * question, and the session's own `completed` flag answers it.
+   */
+  function consumeFocusSlot(finishedKind: SegmentKind): void {
+    if (finishedKind === 'focus') {
+      focusCount += 1
+    }
+  }
+
+  /** Consumes the slot and records the segment the cycle calls for next. */
+  function advanceCycle(finishedKind: SegmentKind): void {
+    consumeFocusSlot(finishedKind)
+
+    const next = nextSegmentAfterFinish(finishedKind, focusCount, focusPreset)
+    currentPresetId = next.presetId
+  }
+
+  /**
+   * Ends the session as completed, and moves the cycle on.
+   *
+   * A completed focus consumes a cycle slot; a completed break does not. The
+   * next segment is recorded in the state, so a reloaded app knows to offer
+   * the break rather than another focus.
+   */
+  function complete(): FocusSession {
+    const finished = finish(true, 'complete')
+    advanceCycle(finished.kind)
+    return finished
+  }
+
+  /**
+   * Ends the running segment now, as a **partial**.
+   *
+   * The session is finished and returned, with `completed: false` — the
+   * record says exactly how long it ran and that it did not reach its plan.
+   *
+   * The focus still consumes its cycle slot: it ran, and the cadence is a
+   * rhythm rather than a reward. But *what comes next* is the caller's call
+   * here — the cycle is not consulted, so the caller may start another focus
+   * instead of taking the break. Use {@link skip} to be handed the cycle's
+   * next segment.
+   */
+  function endEarly(): FocusSession {
+    const finished = finish(false, 'endEarly')
+    consumeFocusSlot(finished.kind)
+    return finished
+  }
+
+  /**
+   * Ends the running segment as a partial **and moves the cycle on**.
+   *
+   * The difference from {@link endEarly} is the cycle: skipping asks what
+   * comes next, and the state records it — the break the cadence calls for
+   * after a focus, the focus after a break. The caller starts it, with an id
+   * of its own.
+   */
+  function skip(): FocusSession {
+    const finished = finish(false, 'skip')
+    advanceCycle(finished.kind)
     return finished
   }
 
@@ -299,5 +381,5 @@ export function createTimer(deps: TimerDeps): Timer {
     return complete()
   }
 
-  return { getState, start, pause, resume, tick }
+  return { getState, start, pause, resume, tick, endEarly, skip }
 }

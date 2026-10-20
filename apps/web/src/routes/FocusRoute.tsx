@@ -10,7 +10,7 @@ import { SunArc } from '../components/SunArc'
  */
 const INITIAL_STATE: PersistedTimerState = {
   activeSession: null,
-  completedFocusCount: 0,
+  focusCount: 0,
   currentPresetId: 'focus-25',
 }
 

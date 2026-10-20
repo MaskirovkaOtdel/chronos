@@ -66,7 +66,7 @@ export interface SessionRepository {
    *
    * This is the resolution of a question the state shape forces. Completing a
    * session moves `activeSession` to `null` *and* advances
-   * `completedFocusCount` in the same instant — the two facts describe one
+   * `focusCount` in the same instant — the two facts describe one
    * moment, "we just finished focus #3 of 4". A crash between two separate
    * writes leaves either a completed session the counter never saw, or a
    * counter that advanced while the session still looks live. **Both halves

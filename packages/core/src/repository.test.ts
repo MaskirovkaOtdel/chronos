@@ -100,13 +100,13 @@ describe('SessionRepository contract', () => {
 
     it('distinguishes never-written from written-and-idle', async () => {
       const repo = new InMemorySessionRepository()
-      await repo.saveState(makePersistedTimerState({ activeSession: null, completedFocusCount: 3 }))
+      await repo.saveState(makePersistedTimerState({ activeSession: null, focusCount: 3 }))
 
       // Top-level non-null: cycle position exists even though nothing is running.
       const state = await repo.loadState()
       expect(state).not.toBeNull()
       expect(state?.activeSession).toBeNull()
-      expect(state?.completedFocusCount).toBe(3)
+      expect(state?.focusCount).toBe(3)
     })
 
     it('writes the whole document in one call, so a transition is atomic', async () => {
@@ -115,11 +115,11 @@ describe('SessionRepository contract', () => {
       await repo.saveState(makePersistedTimerState({ activeSession: running }))
 
       // The completion transition — session out, counter up — is one save.
-      await repo.saveState(makePersistedTimerState({ activeSession: null, completedFocusCount: 1 }))
+      await repo.saveState(makePersistedTimerState({ activeSession: null, focusCount: 1 }))
 
       const state = await repo.loadState()
       expect(state?.activeSession).toBeNull()
-      expect(state?.completedFocusCount).toBe(1)
+      expect(state?.focusCount).toBe(1)
       expect(state?.currentPresetId).toBe('focus-25')
     })
 
@@ -139,7 +139,7 @@ describe('SessionRepository contract', () => {
       // caller who ignores `readonly`, which is the case the copy exists for.
       const source = {
         activeSession: session as FocusSession | null,
-        completedFocusCount: 2,
+        focusCount: 2,
         currentPresetId: 'focus-25',
       }
 
@@ -154,9 +154,9 @@ describe('SessionRepository contract', () => {
       // Neither the outer record nor the session it points at can be edited
       // after the fact — `activeSession` must not alias the caller's object.
       source.activeSession = null
-      source.completedFocusCount = 99
+      source.focusCount = 99
       expect((await repo.loadState())?.activeSession?.id).toBe('sess-1')
-      expect((await repo.loadState())?.completedFocusCount).toBe(2)
+      expect((await repo.loadState())?.focusCount).toBe(2)
     })
   })
 
@@ -180,14 +180,12 @@ describe('SessionRepository contract', () => {
     it('leaves the active document standing when a history session is deleted', async () => {
       const repo = new InMemorySessionRepository()
       const session = makeFocusSession({ id: 'sess-1' })
-      await repo.saveState(
-        makePersistedTimerState({ activeSession: session, completedFocusCount: 1 }),
-      )
+      await repo.saveState(makePersistedTimerState({ activeSession: session, focusCount: 1 }))
 
       await repo.delete('sess-1')
 
       expect((await repo.loadState())?.activeSession?.id).toBe('sess-1')
-      expect((await repo.loadState())?.completedFocusCount).toBe(1)
+      expect((await repo.loadState())?.focusCount).toBe(1)
     })
   })
 })

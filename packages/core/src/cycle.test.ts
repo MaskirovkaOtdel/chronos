@@ -1,11 +1,11 @@
 import fc from 'fast-check'
 import { describe, expect, it } from 'vitest'
-import { nextSegmentAfterCompletion } from './cycle.js'
+import { nextSegmentAfterFinish } from './cycle.js'
 import { FOCUS_25 } from './presets.js'
 
-describe('nextSegmentAfterCompletion', () => {
+describe('nextSegmentAfterFinish', () => {
   it('gives a short break after an ordinary focus', () => {
-    const next = nextSegmentAfterCompletion('focus', 1, FOCUS_25)
+    const next = nextSegmentAfterFinish('focus', 1, FOCUS_25)
 
     expect(next.kind).toBe('short_break')
     expect(next.presetId).toBe('short-break-5')
@@ -15,7 +15,7 @@ describe('nextSegmentAfterCompletion', () => {
   it('gives the long break on the focus that completes the cadence', () => {
     // The count is *after* the increment: this is "we just finished focus #4
     // of 4", and 4 is the multiple.
-    const next = nextSegmentAfterCompletion('focus', 4, FOCUS_25)
+    const next = nextSegmentAfterFinish('focus', 4, FOCUS_25)
 
     expect(next.kind).toBe('long_break')
     expect(next.presetId).toBe('long-break-15')
@@ -23,7 +23,7 @@ describe('nextSegmentAfterCompletion', () => {
   })
 
   it('gives a focus after a break', () => {
-    const next = nextSegmentAfterCompletion('short_break', 3, FOCUS_25)
+    const next = nextSegmentAfterFinish('short_break', 3, FOCUS_25)
 
     expect(next.kind).toBe('focus')
     expect(next.presetId).toBe('focus-25')
@@ -33,7 +33,7 @@ describe('nextSegmentAfterCompletion', () => {
   it('follows the cadence exactly over twelve focuses', () => {
     const kinds = Array.from(
       { length: 12 },
-      (_, i) => nextSegmentAfterCompletion('focus', i + 1, FOCUS_25).kind,
+      (_, i) => nextSegmentAfterFinish('focus', i + 1, FOCUS_25).kind,
     )
 
     expect(kinds).toEqual([
@@ -60,7 +60,7 @@ describe('nextSegmentAfterCompletion', () => {
         const window = FOCUS_25.longBreakAfter
         const kinds = Array.from(
           { length: window },
-          (_, i) => nextSegmentAfterCompletion('focus', start + i, FOCUS_25).kind,
+          (_, i) => nextSegmentAfterFinish('focus', start + i, FOCUS_25).kind,
         )
 
         expect(kinds.filter((kind) => kind === 'long_break')).toHaveLength(1)
@@ -75,7 +75,7 @@ describe('nextSegmentAfterCompletion', () => {
 
         for (let i = 0; i < 40; i += 1) {
           const count = start + i
-          if (nextSegmentAfterCompletion('focus', count, FOCUS_25).kind !== 'long_break') {
+          if (nextSegmentAfterFinish('focus', count, FOCUS_25).kind !== 'long_break') {
             continue
           }
           if (previous !== null) {

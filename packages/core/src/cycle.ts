@@ -16,39 +16,62 @@ export interface NextSegment {
 }
 
 /**
- * Which segment follows a completed one.
+ * Which segment follows a session that has just finished.
+ *
+ * "Finished" covers both ways a session ends: it reached its plan
+ * (*completed*) or the user stopped it (*partial*). Both ask the same
+ * question, and the answer branches on the **kind**, not on how the session
+ * ended — so a partial focus and a completed focus are both followed by a
+ * break, and they are followed by the *same* break.
  *
  * **The cycle.** A focus is always followed by a break, and a break is always
  * followed by a focus — so the interesting decision is only *which* break. It
  * is the long one when the focus that just finished completed the cadence:
  *
  * ```
- * completedFocusCount % focusPreset.longBreakAfter === 0
+ * focusCount % focusPreset.longBreakAfter === 0
  * ```
  *
  * With the classic cadence of 4, the fourth focus earns a long break and the
  * first three earn a short one. The boundary is where the arithmetic is
  * load-bearing, which is why it is the only thing in this file.
  *
- * **`completedFocusCount` is the count *after* the increment.** The caller has
- * already counted the focus that just finished, so the count says "we have
- * just finished focus #3 of 4" — and 3 is not a multiple of 4, while 4 is. An
- * off-by-one here silently demotes every long break to a short one, which is
- * exactly the kind of bug that only shows up weeks later.
+ * **`focusCount` is the cycle position, and it is the count as it stands
+ * after the session that just finished.** The caller advances it for every
+ * focus that reaches a conclusion — completed *or* ended early — and leaves
+ * it alone for a break.
  *
- * Breaks do not advance the count. Only completed focus sessions do, because
- * the count answers "how far through the cadence are we", and a break is not
- * part of the cadence.
+ * That is the whole point of counting positions rather than completions. The
+ * cycle is a rhythm of *focuses run*: every fourth focus gets the long break
+ * whether it was finished or abandoned. A count of completions cannot drive
+ * it, because one skipped focus leaves the completions and the positions out
+ * of step — the count would then hand out a second long break in a row, or a
+ * long break before anything had been finished at all.
+ *
+ * This is the one place where "how much have I done" and "how far through the
+ * cadence am I" come apart, and they are deliberately different questions:
+ *
+ * - **the cadence** counts focuses run, because a cadence of "four focuses"
+ *   means four focuses in the cycle — and it is a rhythm, not a reward;
+ * - **the history** records every finished session, partial or not, with
+ *   `completed` saying which — and the statistics read *that* to report how
+ *   much was actually done.
+ *
+ * A partial is still recorded honestly. It simply does not excuse the user
+ * from the cycle, and it is never reported as a finished focus.
+ *
+ * Breaks do not advance the count either. The count answers "how many focuses
+ * have run", and a break is not a focus.
  *
  * Pure: no clock, no repository, no state. The whole cycle decision is one
  * function over three values, which is why it can be tested exhaustively.
  */
-export function nextSegmentAfterCompletion(
-  completedKind: SegmentKind,
-  completedFocusCount: number,
+export function nextSegmentAfterFinish(
+  finishedKind: SegmentKind,
+  focusCount: number,
   focusPreset: FocusPreset = FOCUS_25,
 ): NextSegment {
-  if (completedKind !== 'focus') {
+  if (finishedKind !== 'focus') {
     return {
       kind: 'focus',
       presetId: focusPreset.id,
@@ -56,8 +79,7 @@ export function nextSegmentAfterCompletion(
     }
   }
 
-  const breakPreset =
-    completedFocusCount % focusPreset.longBreakAfter === 0 ? LONG_BREAK : SHORT_BREAK
+  const breakPreset = focusCount % focusPreset.longBreakAfter === 0 ? LONG_BREAK : SHORT_BREAK
 
   return {
     kind: breakPreset.kind,

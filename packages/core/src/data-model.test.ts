@@ -33,7 +33,7 @@ const SESSION_FIELDS = [
   'startedAt',
 ] as const
 
-const STATE_FIELDS = ['activeSession', 'completedFocusCount', 'currentPresetId'] as const
+const STATE_FIELDS = ['activeSession', 'currentPresetId', 'focusCount'] as const
 
 /** Every nullable field carries a real value, so a dropped field cannot hide. */
 function makePopulatedSession(): FocusSession {
@@ -83,7 +83,7 @@ describe('persisted shape — the 1:1 mapping with docs/DATA-MODEL.md', () => {
   it('documents exactly the fields PersistedTimerState declares', () => {
     const state: PersistedTimerState = {
       activeSession: makePopulatedSession(),
-      completedFocusCount: 3,
+      focusCount: 3,
       currentPresetId: 'focus-25',
     }
     expect(Object.keys(state).sort()).toEqual(STATE_FIELDS)
@@ -118,7 +118,7 @@ describe('persisted shape — the 1:1 mapping with docs/DATA-MODEL.md', () => {
   it('round-trips PersistedTimerState with its nested session intact', () => {
     const state: PersistedTimerState = {
       activeSession: makeLiveSession(),
-      completedFocusCount: 2,
+      focusCount: 2,
       currentPresetId: 'focus-25',
     }
 
@@ -144,7 +144,7 @@ describe('persisted shape — the 1:1 mapping with docs/DATA-MODEL.md', () => {
     const envelope = {
       schemaVersion: 1,
       activeSession: makeLiveSession(),
-      completedFocusCount: 4,
+      focusCount: 4,
       currentPresetId: 'focus-25',
     }
 

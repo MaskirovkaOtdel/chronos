@@ -17,7 +17,7 @@ const FOCUS_25: SegmentSpec = {
 const IDLE = {
   phase: 'idle',
   session: null,
-  completedFocusCount: 0,
+  focusCount: 0,
   currentPresetId: 'focus-25',
 }
 
@@ -243,7 +243,7 @@ describe('createTimer — the transition table', () => {
       const state = timer.getState()
       expect(state.phase).toBe('idle')
       expect(state.session).toBeNull()
-      expect(state.completedFocusCount).toBe(1)
+      expect(state.focusCount).toBe(1)
       expect(state.currentPresetId).toBe('short-break-5')
     })
 
@@ -259,7 +259,7 @@ describe('createTimer — the transition table', () => {
       }
 
       expect(breaks).toEqual(['short-break-5', 'short-break-5', 'short-break-5', 'long-break-15'])
-      expect(timer.getState().completedFocusCount).toBe(4)
+      expect(timer.getState().focusCount).toBe(4)
     })
 
     it('counts breaks not at all, and follows a break with a focus', () => {
@@ -268,7 +268,7 @@ describe('createTimer — the transition table', () => {
       clock.advance(5 * 60 * 1000)
       timer.tick()
 
-      expect(timer.getState().completedFocusCount).toBe(0)
+      expect(timer.getState().focusCount).toBe(0)
       expect(timer.getState().currentPresetId).toBe('focus-25')
     })
 
@@ -276,6 +276,128 @@ describe('createTimer — the transition table', () => {
       const { timer } = makeTimer(1_000)
 
       expect(timer.tick()).toBeNull()
+    })
+  })
+
+  describe('the exit paths', () => {
+    it('ends a segment early as a partial, consuming its cycle slot', () => {
+      const { clock, timer } = makeTimer(1_000)
+      timer.start(FOCUS_25)
+      clock.advance(10 * 60 * 1000)
+
+      const finished = timer.endEarly()
+
+      expect(finished?.endedAt).toBe(1_000 + 10 * 60 * 1000)
+      expect(finished?.actualMs).toBe(10 * 60 * 1000)
+      expect(finished?.completed).toBe(false)
+
+      const state = timer.getState()
+      expect(state.phase).toBe('idle')
+      expect(state.session).toBeNull()
+      // The focus ran, so it consumed a slot — but what comes next is still
+      // the caller's call, so the cycle did not name a segment.
+      expect(state.focusCount).toBe(1)
+      expect(state.currentPresetId).toBe('focus-25')
+    })
+
+    it('refuses to end or skip a segment when there is none running', () => {
+      const { timer } = makeTimer(1_000)
+
+      expect(() => timer.endEarly()).toThrow('endEarly() refused: there is no segment running')
+      expect(() => timer.skip()).toThrow('skip() refused: there is no segment running')
+    })
+
+    it('skips to the next segment, and records it', () => {
+      const { clock, timer } = makeTimer(1_000)
+      timer.start(FOCUS_25)
+      clock.advance(10 * 60 * 1000)
+
+      const finished = timer.skip()
+
+      expect(finished?.completed).toBe(false)
+      expect(timer.getState().currentPresetId).toBe('short-break-5')
+      expect(timer.getState().focusCount).toBe(1)
+    })
+
+    it('skips a break to the next focus', () => {
+      const { clock, timer } = makeTimer(1_000)
+      timer.start({ id: 'b1', presetId: 'short-break-5' })
+      clock.advance(60_000)
+
+      timer.skip()
+
+      expect(timer.getState().currentPresetId).toBe('focus-25')
+    })
+
+    it('caps a completion at the planned duration, while the clock still shows the overrun', () => {
+      const { clock, timer } = makeTimer(1_000)
+      timer.start(FOCUS_25)
+      clock.advance(25 * 60 * 1000 + 1)
+
+      // The live elapsed time is not capped — that is how the overrun is
+      // detected at all.
+      expect(elapsedMs(activeSession(timer), 1_000 + 25 * 60 * 1000 + 1)).toBe(25 * 60 * 1000 + 1)
+
+      const finished = timer.tick()
+
+      // The record, on the other hand, says what the segment was worth.
+      expect(finished?.actualMs).toBe(25 * 60 * 1000)
+    })
+
+    it('records a partial honestly, and still consumes its cycle slot', () => {
+      // Two different questions, two different places. The cycle asks "where
+      // in the rhythm am I" — a focus that ran answers that, whether it
+      // reached its plan or not. The record asks "did it reach its plan" —
+      // and the session's own `completed` flag answers that, which is where
+      // the statistics read it from.
+      const { clock, timer } = makeTimer(1_000)
+      timer.start(FOCUS_25)
+      clock.advance(10 * 60 * 1000)
+
+      const finished = timer.endEarly()
+
+      expect(finished?.completed).toBe(false)
+      expect(finished?.actualMs).toBe(10 * 60 * 1000)
+      expect(timer.getState().focusCount).toBe(1)
+    })
+
+    it('earns the long break after four focuses run, completed or not', () => {
+      const { clock, timer } = makeTimer(1_000)
+
+      // A partial, then three completed focuses: four slots either way.
+      timer.start({ ...FOCUS_25, id: 'p0' })
+      clock.advance(60_000)
+      timer.endEarly()
+
+      for (let i = 0; i < 3; i += 1) {
+        timer.start({ ...FOCUS_25, id: `s${i}` })
+        clock.advance(25 * 60 * 1000)
+        timer.tick()
+      }
+
+      expect(timer.getState().focusCount).toBe(4)
+      expect(timer.getState().currentPresetId).toBe('long-break-15')
+    })
+
+    it('does not hand out a second long break in a row', () => {
+      // The rhythm is exact: every fourth focus earns the long break, and the
+      // fifth does not — whether the fourth was completed or skipped.
+      const { clock, timer } = makeTimer(1_000)
+
+      for (let i = 0; i < 4; i += 1) {
+        timer.start({ ...FOCUS_25, id: `s${i}` })
+        clock.advance(25 * 60 * 1000)
+        timer.tick()
+      }
+
+      expect(timer.getState().currentPresetId).toBe('long-break-15')
+
+      timer.start({ ...FOCUS_25, id: 's4' })
+      clock.advance(10 * 60 * 1000)
+      timer.skip()
+
+      expect(timer.getState().focusCount).toBe(5)
+      expect(timer.getState().currentPresetId).toBe('short-break-5')
     })
   })
 

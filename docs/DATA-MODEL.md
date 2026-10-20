@@ -14,7 +14,7 @@
 | Derived stats (today totals, streak, peak hours, ribbon) | —                                     | **nowhere — always derived from sessions**     | 2     |
 | Sync outbox                                              | —                                     | localStorage only, never synced as domain data | 5     |
 
-**Stats are not persisted.** The moment a stored number like `completedFocusCount`-style state is
+**Stats are not persisted.** The moment a stored number like the focus count is
 _duplicated_ into a stats record, two sources of truth exist and they drift — and the invariants
 in plan phase 2 ("completes exactly once", "partials excluded from streaks") are only checkable
 against a single source. Deriving is O(history) on read, which is the right trade while history
@@ -158,18 +158,34 @@ throwing delete would poison every retry with a failure that means nothing.
 
 ### `PersistedTimerState` (3 fields, identical in both)
 
-| Field                 | TypeScript             | Stored as                   | Nullable |
-| --------------------- | ---------------------- | --------------------------- | -------- |
-| `activeSession`       | `FocusSession \| null` | nested map/object or `null` | yes      |
-| `completedFocusCount` | `number`               | number                      | no       |
-| `currentPresetId`     | `string`               | string                      | no       |
+| Field             | TypeScript             | Stored as                   | Nullable |
+| ----------------- | ---------------------- | --------------------------- | -------- |
+| `activeSession`   | `FocusSession \| null` | nested map/object or `null` | yes      |
+| `focusCount`      | `number`               | number                      | no       |
+| `currentPresetId` | `string`               | string                      | no       |
 
 Note `activeSession` nests a _complete_ `FocusSession`, so every row above applies recursively —
 one definition, applied twice, no special case for the nested copy.
 
-`completedFocusCount` lives on the state and not on the session because it is **cycle position**,
-not a property of any one session — but it must still persist, or the long-break cadence resets
-every time the tab closes.
+`focusCount` lives on the state and not on the session because it is **cycle position**, not a
+property of any one session — but it must still persist, or the long-break cadence resets every
+time the tab closes.
+
+> **`focusCount` counts focus segments that have run to a conclusion — completed _or_ ended
+> early.** It is the position in the cycle, and the cycle is a rhythm of _focuses run_: every
+> fourth focus is followed by a long break whether it was finished or abandoned.
+>
+> It was called `completedFocusCount` until phase 2 day 4, when a test caught the model breaking:
+> a count of completions cannot drive the rhythm, because one skipped focus leaves the
+> completions and the positions out of step. The count would hand out a **second long break in a
+> row** (four focuses completed, the fifth skipped — the count is still 4), or a **long break
+> before anything had been finished** (nothing completed, the first focus skipped — the count is
+> 0, and `0 % 4 === 0`).
+>
+> Whether a focus actually reached its plan is a **different question**, and it is answered per
+> session by `FocusSession.completed`. The statistics read the history for that; this count
+> answers only "where in the cycle are we". Keeping them apart is what makes both honest: the
+> cadence never excuses a partial, and the record never overstates one.
 
 > **`activeSession` and the cycle fields must be written atomically.** They describe one instant
 > ("we just finished focus #3 of 4 and are idle"). A crash between two separate writes yields a

@@ -50,7 +50,7 @@ export type Mutable<T> = { -readonly [K in keyof T]: T[K] }
 /**
  * A `PersistedTimerState` for tests: idle, nothing run yet, first preset.
  *
- * A test that *has* run something overrides `completedFocusCount`; one that
+ * A test that *has* run something overrides `focusCount`; one that
  * started a segment overrides `activeSession`. Both defaults are honest for a
  * fresh install, which is what every persistence test has to start from anyway.
  */
@@ -59,7 +59,7 @@ export function makePersistedTimerState(
 ): PersistedTimerState {
   return {
     activeSession: null,
-    completedFocusCount: 0,
+    focusCount: 0,
     currentPresetId: 'focus-25',
     ...overrides,
   }
