@@ -1,26 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import type { FocusSession } from './session.js'
 import { ManualClock } from './testing/ManualClock.js'
+import { makeFocusSession } from './testing/fixtures.js'
 import { elapsedMs } from './elapsed.js'
-
-const FOCUS_25_MIN = 25 * 60 * 1000
-
-function makeSession(overrides: Partial<FocusSession> = {}): FocusSession {
-  return {
-    id: 'sess-1',
-    kind: 'focus',
-    startedAt: 0,
-    pauseStartedAt: null,
-    accumulatedPausedMs: 0,
-    plannedDurationMs: FOCUS_25_MIN,
-    label: null,
-    presetId: 'focus-25',
-    endedAt: null,
-    actualMs: null,
-    completed: false,
-    ...overrides,
-  }
-}
 
 /**
  * Time is never slept through — a `ManualClock` is stepped by the test, so
@@ -29,7 +10,7 @@ function makeSession(overrides: Partial<FocusSession> = {}): FocusSession {
 describe('elapsedMs', () => {
   it('accumulates while running', () => {
     const clock = new ManualClock()
-    const session = makeSession({ startedAt: clock.now() })
+    const session = makeFocusSession({ startedAt: clock.now() })
 
     clock.advance(1000)
     expect(elapsedMs(session, clock.now())).toBe(1000)
@@ -40,7 +21,7 @@ describe('elapsedMs', () => {
 
   it('stops accumulating during a pause and resumes where it left off', () => {
     const clock = new ManualClock()
-    let session = makeSession({ startedAt: clock.now() })
+    let session = makeFocusSession({ startedAt: clock.now() })
 
     // 10s of work, then pause.
     clock.advance(10_000)
@@ -63,7 +44,7 @@ describe('elapsedMs', () => {
 
   it('accumulates multiple separate pauses', () => {
     const clock = new ManualClock()
-    let session = makeSession({ startedAt: clock.now() })
+    let session = makeFocusSession({ startedAt: clock.now() })
 
     clock.advance(1000)
     session = { ...session, pauseStartedAt: clock.now() }
@@ -92,7 +73,7 @@ describe('elapsedMs', () => {
 
   it('clamps to zero rather than going negative when the clock runs backwards', () => {
     const clock = new ManualClock(50_000)
-    const session = makeSession({ startedAt: clock.now() })
+    const session = makeFocusSession({ startedAt: clock.now() })
 
     clock.advance(-30_000)
     expect(elapsedMs(session, clock.now())).toBe(0)
@@ -100,7 +81,7 @@ describe('elapsedMs', () => {
 
   it('clamps to zero for an instant before the session started', () => {
     const clock = new ManualClock(100_000)
-    const session = makeSession({ startedAt: clock.now() })
+    const session = makeFocusSession({ startedAt: clock.now() })
 
     expect(elapsedMs(session, 50_000)).toBe(0)
   })

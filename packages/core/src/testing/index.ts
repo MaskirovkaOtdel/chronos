@@ -8,3 +8,4 @@
  */
 export { InMemorySessionRepository } from './InMemorySessionRepository.js'
 export { ManualClock } from './ManualClock.js'
+export { FOCUS_25_MIN, makeFocusSession, makePersistedTimerState } from './fixtures.js'
