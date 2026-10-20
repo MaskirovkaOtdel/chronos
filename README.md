@@ -66,6 +66,7 @@ A Turborepo monorepo:
 ```
 packages/core     Domain logic behind port contracts. Zero I/O, enforced by tsconfig.
 scripts/          Repo tooling (theme derivation).
+docs/             Design artifacts — the data model and its schema layouts.
 apps/web          The web application.
 ```
 
@@ -76,6 +77,11 @@ compile rather than failing at runtime.
 
 Time-zone logic is quarantined behind a `/world` boundary — a design rule the project
 enforces, so the rest of the codebase never performs raw `Date` arithmetic.
+
+Persistence is designed before it is built: [`docs/DATA-MODEL.md`](docs/DATA-MODEL.md) holds
+the localStorage schema and the Firestore document layout as a written design, together with
+the field-by-field 1:1 mapping between them. A test in `@chronos/core` fails if the schema
+document and the domain types ever drift apart.
 
 ## Roadmap
 

@@ -26,8 +26,11 @@ export interface SessionListOptions {
  * A session lives in the active slot *until it is `put`* — writing the active
  * session does not add it to `list()`, and deleting it from history does not
  * clear the active slot. Keeping these independent is what lets the localStorage
- * adapter (one document) and the Firestore adapter (two collections) implement
- * the same interface without either growing special cases.
+ * adapter (`chronos:active` plus one key per session) and the Firestore adapter
+ * (two collections) implement the same interface without either growing special
+ * cases — and it is what makes a write that lands between the two spaces safe:
+ * neither space constrains the other, so a half-completed write cannot produce
+ * contradictory state. The designed layout for both is `docs/DATA-MODEL.md`.
  *
  * Implementations are **async even when in memory**: the real adapters are
  * localStorage and Firestore, and an interface that returns values synchronously
