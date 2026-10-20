@@ -38,6 +38,13 @@ export interface SessionListOptions {
  * localStorage and Firestore, and an interface that returns values synchronously
  * cannot be implemented by either. Core would then have to branch on sync/async,
  * which is exactly the leak this boundary exists to prevent.
+ *
+ * **Return values belong to the caller.** `loadState()` and `list()` hand back
+ * objects the caller owns: mutating one must not be able to reach into what the
+ * implementation believes is stored. An implementation that caches its document
+ * and returns the cached object would break that, quietly and only under a
+ * mutation — so the in-memory double, which copies *and* freezes, is the
+ * reference rather than an embellishment.
  */
 export interface SessionRepository {
   /**
@@ -72,9 +79,15 @@ export interface SessionRepository {
    * `saveActive` and `clearActive` were *replaced* rather than supplemented.
    * Two independent writers of one document is the bug, not the fix.
    *
-   * Replacing the active session therefore reads the state, swaps
-   * `activeSession`, and writes back in one call; the adapter owns that
-   * round-trip rather than every caller re-implementing it.
+   * Replacing the active session is therefore a read-modify-write **by the
+   * caller**: `loadState()`, swap `activeSession`, `saveState()`. Making the
+   * unit of write the whole document removes the crash window of a *partial*
+   * write; it does not make concurrent writers safe, and it is not meant to.
+   * Two callers interleaving their own read-modify-write can still lose one of
+   * the updates, exactly as two tabs racing on one storage key can. There is
+   * one timer per app instance and it is the single writer of this document —
+   * that is the assumption the contract rests on, and it is worth stating
+   * rather than implying that the adapter prevents it.
    */
   saveState(state: PersistedTimerState): Promise<void>
 
@@ -86,6 +99,12 @@ export interface SessionRepository {
    * local-day bucketing, streaks and the history ribbon all read this list, and
    * Firestore's natural `orderBy` ordering must match what the in-memory tests
    * assert or the two will disagree about streak boundaries.
+   *
+   * Ids are compared as **UTF-16 code units** — JavaScript's default string
+   * ordering. Firestore's `orderBy('id')` orders by UTF-8 bytes, and the two
+   * agree everywhere except above the Basic Multilingual Plane, so **ids must
+   * be ASCII** for the backends to stay in step. UUID-shaped ids qualify, and
+   * the app mints nothing else.
    */
   list(options?: SessionListOptions): Promise<FocusSession[]>
 

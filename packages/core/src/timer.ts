@@ -31,7 +31,10 @@ export type TimerPhase = 'idle' | 'running' | 'paused'
  */
 export interface TimerState {
   readonly phase: TimerPhase
-  /** `null` while idle. Frozen: a caller cannot rewrite timer state through it. */
+  /**
+   * `null` while idle. The session is frozen and this snapshot is a fresh
+   * copy, so nothing a caller does to what it is handed can reach the timer.
+   */
   readonly session: FocusSession | null
 }
 
@@ -117,6 +120,9 @@ export function createTimer(deps: TimerDeps): Timer {
   }
 
   function start(spec: SegmentSpec): void {
+    if (!Number.isFinite(spec.plannedDurationMs) || spec.plannedDurationMs <= 0) {
+      throw new Error('start() refused: plannedDurationMs must be a positive, finite number')
+    }
     if (session !== null) {
       throw new Error(`start() refused: a segment is already ${phaseOf(session)}`)
     }
@@ -144,7 +150,23 @@ export function createTimer(deps: TimerDeps): Timer {
       throw new Error('pause() refused: the segment is already paused')
     }
 
-    session = Object.freeze({ ...session, pauseStartedAt: clock.now() })
+    // A pause cannot begin before the session did, and cannot begin before the
+    // pauses already closed have been accounted for: every closed pause lies
+    // inside the span between `startedAt` and now, so their total is at most
+    // `now - startedAt`, which puts the current pause at or after
+    // `startedAt + accumulatedPausedMs`.
+    //
+    // The clock can step backwards, and without this bound the timer would
+    // record a pause that started before the work it interrupts — a state the
+    // domain does not admit and `elapsedMs` cannot represent. The pause tail
+    // would swallow the whole session, the floor would report zero for work
+    // that was genuinely done, and the loss would only surface minutes later
+    // as a countdown that refuses to move.
+    const earliestPauseStart = session.startedAt + session.accumulatedPausedMs
+    session = Object.freeze({
+      ...session,
+      pauseStartedAt: Math.max(clock.now(), earliestPauseStart),
+    })
   }
 
   function resume(): void {
