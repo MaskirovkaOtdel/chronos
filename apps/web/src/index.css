@@ -1,5 +1,6 @@
 @import 'tailwindcss';
 @import './theme/themes.css';
+@import './theme/fonts.css';
 
 /*
  * Tailwind v4 is CSS-first: `@theme` replaces tailwind.config.js.
@@ -22,6 +23,19 @@
   --color-short-break: var(--short-break);
   --color-long-break: var(--long-break);
   --color-success: var(--success);
+
+  /*
+   * Nunito is the UI face and carries every numeral — tabular, weight-invariant
+   * (see `./theme/fonts.css`). Fraunces is display-only: the day-6 gate proved
+   * its digits jitter, so it must never set the countdown.
+   *
+   * The metric-matched fallback sits second in each stack. That is what makes
+   * `font-display: swap` cost zero layout shift instead of merely milliseconds.
+   */
+  --font-sans:
+    'Nunito', 'Nunito Fallback', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto,
+    sans-serif;
+  --font-display: 'Fraunces', 'Fraunces Fallback', Georgia, 'Times New Roman', serif;
 }
 
 /*
@@ -44,20 +58,45 @@
 
   body {
     margin: 0;
-    min-height: 100vh;
+    /* dvh, not vh: on mobile a `100vh` body plus a fixed bottom tab bar leaves
+       the bar sitting over phantom scroll. The shell (§6) owns the real layout;
+       this is the safety net beneath it. */
+    min-height: 100dvh;
     background-color: var(--background);
     color: var(--foreground);
+    font-family: var(--font-sans);
     /*
-     * Intentionally a system stack. Day 6 is the Fraunces spike with a binary
-     * go/no-go on tabular numerals; committing to a font before that gate
-     * passes is the mistake the gate exists to prevent.
+     * Belt-and-braces, not load-bearing — MEASURED: applying `tabular-nums`
+     * changes the digit advance by exactly 0px in Nunito (600.00 → 600.00 at
+     * 1000px), Arial (556.16 → 556.16) and Fraunces alike, because Nunito's and
+     * Arial's figures are already uniform (spread 0) by design. The 1Hz
+     * countdown causes zero reflow because of that, not because of this line.
+     *
+     * It does NOT rescue Fraunces: `tabular-nums` is a no-op there too, leaving
+     * its digits drifting 23.65px per glyph. That is the day-6 gate's failure,
+     * measured from the other side — Fraunces stays display-only.
      */
-    font-family:
-      ui-sans-serif,
-      system-ui,
-      -apple-system,
-      'Segoe UI',
-      Roboto,
-      sans-serif;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /*
+   * §9: warm-tinted focus rings at 3:1. `--focus` is contrast-tested at 3:1
+   * against all three surfaces by `src/theme/contrast.test.ts`, so the ring's
+   * visibility is gated, not eyeballed.
+   *
+   * `:focus-visible` only, so pointer users never see a ring but keyboard users
+   * always do.
+   */
+  :focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+  }
+
+  /*
+   * §9: route change moves focus to the `h1`. Off by default for assistive tech
+   * — it is a focus target, not a heading announcement.
+   */
+  h1:focus {
+    outline: none;
   }
 }

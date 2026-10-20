@@ -1,0 +1,89 @@
+/*
+ * Self-hosted fonts + metric-matched fallbacks (phase 1, day 8).
+ *
+ * §8 makes zero CLS a hard requirement: `font-display: swap` alone would paint
+ * the fallback first and then reflow everything when the real face lands. So
+ * each fallback is handed the real font's metrics — `size-adjust`,
+ * `ascent-override`, `descent-override`, `line-gap-override` — making the swap
+ * invisible rather than merely fast.
+ *
+ * MEASURED, not assumed. Method: in-browser canvas TextMetrics at 1000px for
+ * precision, then rendered line boxes verified at 100px. Two things were
+ * discovered by measuring rather than by reading the spec:
+ *
+ *   1. `size-adjust` MULTIPLIES the override metrics. The override values below
+ *      are therefore the real font's metrics DIVIDED by size-adjust. Stating
+ *      them unscaled renders the fallback box 7.9% too tall (147.2px vs 136.0px
+ *      for Nunito) — a visible jump on the exact swap these exist to hide.
+ *
+ *   2. Nunito's digits measure 60.00px per glyph at 400, 600 AND 700, and
+ *      Arial's measure 55.6152px at all three. One size-adjust is therefore
+ *      correct at every weight, and both are tabular (spread 0) — the countdown
+ *      cannot jitter at any weight. Fraunces' digits, by contrast, drift
+ *      23.6–24.6px per glyph, which is why it is display-only.
+ *
+ * Verified equality of line boxes (real vs fallback):
+ *   Nunito / Arial          136.0 == 136.0
+ *   Fraunces / Georgia      123.2 == 123.2
+ *   Nunito digit advance    59.9977 vs 60.00
+ *
+ * Width is matched on a different metric per face, deliberately:
+ *   Nunito   → digits, because it carries the timer's numerals.
+ *   Fraunces → letters, because it is display-only and never sets numerals.
+ *
+ * Both faces are already Latin+digits subsets (§8 subsetting), so the same
+ * unicode-range gates the fallbacks too — non-Latin text skips all four faces
+ * and lands on the system stack with that stack's own natural metrics.
+ */
+
+/* Latin + digits (Google Fonts' standard latin range). Digits are U+0030–0039,
+   well inside U+0000–00FF. Repeated rather than shared, because @font-face
+   descriptors should not depend on custom-property substitution. */
+
+@font-face {
+  font-family: 'Nunito';
+  src: url('../assets/fonts/nunito-latin.woff2') format('woff2');
+  font-weight: 400 700;
+  font-style: normal;
+  font-display: swap;
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
+    U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: 'Fraunces';
+  src: url('../assets/fonts/fraunces-latin.woff2') format('woff2');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
+    U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+/* --- Fallbacks carrying the real faces' metrics --- */
+
+@font-face {
+  font-family: 'Nunito Fallback';
+  src: local('Arial'), local('Helvetica');
+  size-adjust: 107.8841%; /* = 60 / 55.6152, digit-matched */
+  ascent-override: 93.7117%; /* = 101.1 / 1.078841 */
+  descent-override: 32.7203%; /* = 35.3 / 1.078841 */
+  line-gap-override: 0%;
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
+    U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: 'Fraunces Fallback';
+  src: local('Georgia');
+  size-adjust: 79.4208%; /* letter-matched: headings, never numerals */
+  ascent-override: 123.1415%; /* = 97.8 / 0.794208 */
+  descent-override: 32.1075%; /* = 25.5 / 0.794208 */
+  line-gap-override: 0%;
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
+    U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
