@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import type { FocusSession, PersistedTimerState } from './session.js'
-import type { Notifier } from './notifier.js'
 import { createTimer, RESUME_GRACE_MS } from './timer.js'
 import type { SegmentSpec, Timer } from './timer.js'
 import { elapsedMs } from './elapsed.js'
@@ -8,6 +7,7 @@ import { InMemorySessionRepository } from './testing/InMemorySessionRepository.j
 import { ManualClock } from './testing/ManualClock.js'
 import type { Mutable } from './testing/fixtures.js'
 import { makeFocusSession, makePersistedTimerState } from './testing/fixtures.js'
+import { stubNotifier } from './testing/stubNotifier.js'
 
 const FOCUS_25: SegmentSpec = {
   id: 's1',
@@ -20,18 +20,6 @@ const IDLE = {
   session: null,
   focusCount: 0,
   currentPresetId: 'focus-25',
-}
-
-/**
- * Day 7 replaces this with the real fake — permission states, queued
- * notifications, the lot. Day 2 reads nothing from a notifier; this exists so
- * the factory's dependency list is satisfied honestly rather than with a cast.
- */
-const stubNotifier: Notifier = {
-  supported: true,
-  permission: 'default',
-  requestPermission: async () => 'granted',
-  notify: async () => undefined,
 }
 
 /**

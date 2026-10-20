@@ -13,8 +13,10 @@ import type { FocusSession } from './session.js'
  *
  * The result is floored at **0** (invariant: *elapsed is never negative*).
  * A clock that jumps backwards, or a `nowMs` earlier than `startedAt`, is a
- * real occurrence — timezone changes and manual clock adjustment both do it —
+ * real occurrence — an NTP correction or a manual clock adjustment does it —
  * and a negative bar on screen is the visible symptom of letting it through.
+ * A *timezone* change does not: epoch milliseconds do not move when the zone
+ * does, so DST and travel are none of this formula's business.
  *
  * Deliberately **not** capped at `plannedDurationMs` here. Overrun is a
  * distinct domain event: the engine detects it, auto-completes the segment and
