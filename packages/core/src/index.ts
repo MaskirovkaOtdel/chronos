@@ -14,8 +14,15 @@
 // Domain
 export type { SegmentKind, FocusSession, PersistedTimerState } from './session.js'
 export { elapsedMs } from './elapsed.js'
-export { createTimer } from './timer.js'
-export type { Timer, TimerState, TimerPhase, SegmentSpec, TimerDeps } from './timer.js'
+export { createTimer, RESUME_GRACE_MS } from './timer.js'
+export type {
+  Timer,
+  TimerState,
+  TimerPhase,
+  SegmentSpec,
+  TimerDeps,
+  RestoreOutcome,
+} from './timer.js'
 export { PRESETS, FOCUS_25, SHORT_BREAK, LONG_BREAK, findPreset } from './presets.js'
 export type { Preset, FocusPreset, BreakPreset, AnyPreset } from './presets.js'
 export { nextSegmentAfterFinish } from './cycle.js'

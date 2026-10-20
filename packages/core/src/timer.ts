@@ -1,20 +1,36 @@
 import type { Clock } from './clock.js'
 import type { Notifier } from './notifier.js'
 import type { SessionRepository } from './repository.js'
-import type { FocusSession, SegmentKind } from './session.js'
+import type { FocusSession, PersistedTimerState, SegmentKind } from './session.js'
 import { elapsedMs } from './elapsed.js'
 import { nextSegmentAfterFinish } from './cycle.js'
 import { FOCUS_25, findPreset } from './presets.js'
 import type { FocusPreset } from './presets.js'
 
 /**
- * Phase 2, day 2: the transition table — three phases, three verbs.
+ * How long past a session's planned duration the app will still resume it
+ * silently.
  *
- * `start`, `pause` and `resume` are the whole surface. Completion detection
- * (day 3), the remaining exit paths (day 4), persistence (day 5), clock
- * robustness (day 6) and notification policy (day 7) each extend this; none of
- * them is approximated here, which is why there is no `tick()` and no
- * auto-complete yet.
+ * The plan's rule, verbatim: *"Reopen within `planned + 30s` → silently
+ * resume. Beyond → mark completed, notify, land on idle with 'Completed while
+ * you were away.' Never scolding."*
+ *
+ * The grace period is what makes a brief absence — a reload, a crashed tab, a
+ * switched app — invisible, while a genuine absence is *settled* rather than
+ * left hanging. It is a grace period, not a tolerance for imprecision: a
+ * session that finished while the app was closed is completed and recorded
+ * either way.
+ */
+export const RESUME_GRACE_MS = 30_000
+
+/**
+ * The timer: phases, transitions, and the persistence behind them.
+ *
+ * `idle`, `running` and `paused`; three verbs, two exit paths, and a
+ * completion detected on the clock. Every transition writes the whole state
+ * document before it resolves, and the startup reconciliation follows the
+ * plan's rules exactly. Clock robustness (day 6) and notification policy
+ * (day 7) still extend this.
  *
  * Illegal moves **throw** rather than no-op. The buttons that will drive this
  * live in the UI and are expected to be disabled by state; a call that reaches
@@ -95,10 +111,10 @@ export interface SegmentSpec {
 /**
  * Everything the timer asks of the outside world.
  *
- * Only `clock` is read so far. `repository` and `notifier` are accepted now
- * because the plan fixes this signature and days 5 and 7 activate them — the
- * public shape stays put while the behaviour underneath grows into it, instead
- * of being widened under callers three times.
+ * `clock` and `repository` are read. `notifier` is accepted because the plan
+ * fixes this signature and day 7 activates it — the public shape stays put
+ * while the behaviour underneath grows into it, instead of being widened
+ * under its callers again.
  */
 export interface TimerDeps {
   readonly clock: Clock
@@ -110,14 +126,19 @@ export interface Timer {
   /** The current phase and the session behind it. Safe to call at any time. */
   getState(): TimerState
 
-  /** `idle → running`, building the segment from the clock and its preset. */
-  start(spec: SegmentSpec): void
+  /**
+   * `idle → running`, building the segment from the clock and its preset.
+   *
+   * Every transition is **persisted before it resolves**: the whole state
+   * document is written in one call, so a transition is one atomic write.
+   */
+  start(spec: SegmentSpec): Promise<void>
 
   /** `running → paused`, stamped with the clock's instant. */
-  pause(): void
+  pause(): Promise<void>
 
   /** `paused → running`, folding the pause into `accumulatedPausedMs`. */
-  resume(): void
+  resume(): Promise<void>
 
   /**
    * Checks the clock, and completes the segment if it has reached its planned
@@ -128,10 +149,10 @@ export interface Timer {
    * countdown. So completion is detected when the app asks, which keeps the
    * whole thing a pure function of the clock.
    *
-   * Returns the session that completed, so the caller can put it in history.
-   * `null` when nothing completed.
+   * Returns the session that completed. `null` when nothing completed — and
+   * nothing is written either, because nothing changed.
    */
-  tick(): FocusSession | null
+  tick(): Promise<FocusSession | null>
 
   /**
    * Ends the running segment now, as a **partial**, and hands it back.
@@ -141,7 +162,7 @@ export interface Timer {
    * — it ran — but *what comes next* is the caller's choice here, so the
    * cycle is not consulted.
    */
-  endEarly(): FocusSession
+  endEarly(): Promise<FocusSession>
 
   /**
    * Ends the running segment as a partial **and moves the cycle on**, so the
@@ -149,7 +170,41 @@ export interface Timer {
    *
    * The caller starts it — with an id of its own, since core cannot mint one.
    */
-  skip(): FocusSession
+  skip(): Promise<FocusSession>
+
+  /**
+   * Reconciles a persisted state into this timer, as the app starts up.
+   *
+   * The reconciliation follows the plan's rules exactly:
+   *
+   * ```
+   * read activeSession
+   *   ├─ none      → idle
+   *   ├─ paused    → still paused (pauses are patient — a week-old pause is fine)
+   *   └─ running
+   *        ├─ elapsed < planned + 30s  → auto-resume silently
+   *        └─ otherwise                → completed with actualMs, notify, idle
+   * ```
+   *
+   * The "completed while you were away" case is *completed and recorded*, not
+   * discarded: the session goes to history, the cycle advances, and the timer
+   * lands on idle. The notification itself is day 7's work — the outcome is
+   * returned here so the app can decide what to say.
+   */
+  restore(state: PersistedTimerState | null): Promise<RestoreOutcome>
+}
+
+/**
+ * What the startup reconciliation found.
+ *
+ * Both fields are `null` in the ordinary case — nothing was running, so
+ * nothing was resumed and nothing finished while the app was away.
+ */
+export interface RestoreOutcome {
+  /** The session that was running or paused and has been resumed. */
+  readonly resumed: FocusSession | null
+  /** A session that finished while the app was away — completed and recorded. */
+  readonly completedWhileAway: FocusSession | null
 }
 
 /** Reads the phase off a session; `null` (no session) is `idle`. */
@@ -166,9 +221,15 @@ function phaseOf(session: FocusSession | null): TimerPhase {
  * what lets `getState()` hand out an object and still mean it: a snapshot
  * taken before `pause()` goes on describing the world as it was, rather than
  * changing underneath its reader.
+ *
+ * **Every transition persists the whole state document before it resolves.**
+ * The document is the unit of write (week 3), so a transition is one atomic
+ * write — never two, never a half-written pair. That is why the verbs are
+ * asynchronous: the port is asynchronous, and a transition that returned
+ * before its write landed would be a transition that had not happened yet.
  */
 export function createTimer(deps: TimerDeps): Timer {
-  const { clock } = deps
+  const { clock, repository } = deps
 
   let session: FocusSession | null = null
   let focusCount = 0
@@ -204,7 +265,30 @@ export function createTimer(deps: TimerDeps): Timer {
     }
   }
 
-  function start(spec: SegmentSpec): void {
+  /**
+   * Writes the whole state document.
+   *
+   * One call, one document: the active session and the cycle position move
+   * together or not at all.
+   */
+  async function persist(): Promise<void> {
+    await repository.saveState({ activeSession: session, focusCount, currentPresetId })
+  }
+
+  /**
+   * Files a finished session in the history.
+   *
+   * History is **upserted by id**, so filing the same session twice is a
+   * no-op rather than a duplicate — which is what makes the retry safe when a
+   * write fails half way: the session is filed *before* the state is written,
+   * so a crash in between leaves the history one step ahead of the state, and
+   * the next attempt files the same id again.
+   */
+  async function file(finished: FocusSession): Promise<void> {
+    await repository.put(finished)
+  }
+
+  async function start(spec: SegmentSpec): Promise<void> {
     const preset = findPreset(spec.presetId)
     if (preset === null) {
       throw new Error(`start() refused: no preset named "${spec.presetId}"`)
@@ -231,9 +315,11 @@ export function createTimer(deps: TimerDeps): Timer {
       actualMs: null,
       completed: false,
     })
+
+    await persist()
   }
 
-  function pause(): void {
+  async function pause(): Promise<void> {
     if (session === null) {
       throw new Error('pause() refused: there is no segment running')
     }
@@ -258,9 +344,11 @@ export function createTimer(deps: TimerDeps): Timer {
       ...session,
       pauseStartedAt: Math.max(clock.now(), earliestPauseStart),
     })
+
+    await persist()
   }
 
-  function resume(): void {
+  async function resume(): Promise<void> {
     if (session === null) {
       throw new Error('resume() refused: there is no segment paused')
     }
@@ -279,6 +367,8 @@ export function createTimer(deps: TimerDeps): Timer {
       pauseStartedAt: null,
       accumulatedPausedMs: session.accumulatedPausedMs + pausedFor,
     })
+
+    await persist()
   }
 
   /**
@@ -291,7 +381,7 @@ export function createTimer(deps: TimerDeps): Timer {
    * the overrun is detected at all — so the overrun is still visible on the
    * countdown while the record says what the segment was worth.
    */
-  function finish(completed: boolean, action: string): FocusSession {
+  async function finish(completed: boolean, action: string): Promise<FocusSession> {
     if (session === null) {
       throw new Error(`${action}() refused: there is no segment running`)
     }
@@ -337,9 +427,11 @@ export function createTimer(deps: TimerDeps): Timer {
    * next segment is recorded in the state, so a reloaded app knows to offer
    * the break rather than another focus.
    */
-  function complete(): FocusSession {
-    const finished = finish(true, 'complete')
+  async function complete(): Promise<FocusSession> {
+    const finished = await finish(true, 'complete')
+    await file(finished)
     advanceCycle(finished.kind)
+    await persist()
     return finished
   }
 
@@ -355,9 +447,11 @@ export function createTimer(deps: TimerDeps): Timer {
    * instead of taking the break. Use {@link skip} to be handed the cycle's
    * next segment.
    */
-  function endEarly(): FocusSession {
-    const finished = finish(false, 'endEarly')
+  async function endEarly(): Promise<FocusSession> {
+    const finished = await finish(false, 'endEarly')
+    await file(finished)
     consumeFocusSlot(finished.kind)
+    await persist()
     return finished
   }
 
@@ -369,17 +463,105 @@ export function createTimer(deps: TimerDeps): Timer {
    * after a focus, the focus after a break. The caller starts it, with an id
    * of its own.
    */
-  function skip(): FocusSession {
-    const finished = finish(false, 'skip')
+  async function skip(): Promise<FocusSession> {
+    const finished = await finish(false, 'skip')
+    await file(finished)
     advanceCycle(finished.kind)
+    await persist()
     return finished
   }
 
-  function tick(): FocusSession | null {
+  async function tick(): Promise<FocusSession | null> {
     if (session === null) return null
     if (elapsedMs(session, clock.now()) < session.plannedDurationMs) return null
     return complete()
   }
 
-  return { getState, start, pause, resume, tick, endEarly, skip }
+  /**
+   * Reconciles a persisted state into this timer, as the app starts up.
+   *
+   * The plan's rules, exactly:
+   *
+   * ```
+   * read activeSession
+   *   ├─ none      → idle
+   *   ├─ paused    → still paused (pauses are patient — a week-old pause is fine)
+   *   └─ running
+   *        ├─ elapsed < planned + 30s  → auto-resume silently
+   *        └─ otherwise                → completed with actualMs, notify, idle
+   * ```
+   *
+   * The "completed while you were away" case is *completed and recorded*, not
+   * discarded: the session is filed in the history, the cycle advances, and
+   * the timer lands on idle. The notification is day 7's work, so the outcome
+   * carries the session and the app decides what to say about it.
+   */
+  async function restore(state: PersistedTimerState | null): Promise<RestoreOutcome> {
+    if (state === null) {
+      return { resumed: null, completedWhileAway: null }
+    }
+
+    focusCount = state.focusCount
+    currentPresetId = state.currentPresetId
+
+    const restored = state.activeSession
+    if (restored === null) {
+      return { resumed: null, completedWhileAway: null }
+    }
+
+    // A corrupt record must not become a NaN countdown. localStorage validates
+    // nothing at all, so the guard belongs here rather than in the adapter.
+    if (!isUsable(restored)) {
+      return { resumed: null, completedWhileAway: null }
+    }
+
+    // Pauses are patient. A week-old pause is still a pause, and the plan says
+    // so: it is restored as paused, not treated as a session that ended.
+    if (restored.pauseStartedAt !== null) {
+      session = Object.freeze({ ...restored })
+      return { resumed: session, completedWhileAway: null }
+    }
+
+    const now = clock.now()
+    const elapsed = elapsedMs(restored, now)
+
+    if (elapsed < restored.plannedDurationMs + RESUME_GRACE_MS) {
+      session = Object.freeze({ ...restored })
+      return { resumed: session, completedWhileAway: null }
+    }
+
+    // It finished while the app was away. The plan's wording: "completed with
+    // actualMs, notify, idle" — completed, recorded, and left on idle.
+    const finished = Object.freeze({
+      ...restored,
+      endedAt: now,
+      actualMs: Math.min(elapsed, restored.plannedDurationMs),
+      completed: true,
+    })
+
+    await file(finished)
+    advanceCycle(finished.kind)
+    await persist()
+
+    return { resumed: null, completedWhileAway: finished }
+  }
+
+  return { getState, start, pause, resume, tick, endEarly, skip, restore }
+}
+
+/**
+ * A session is usable only if its numbers are finite.
+ *
+ * The persisted record is the app's own past, and localStorage validates
+ * nothing at all — one truncated or hand-edited entry must not turn the
+ * countdown into `NaN` and the elapsed time into a number that compares
+ * false against everything.
+ */
+function isUsable(session: FocusSession): boolean {
+  return (
+    Number.isFinite(session.startedAt) &&
+    Number.isFinite(session.plannedDurationMs) &&
+    Number.isFinite(session.accumulatedPausedMs) &&
+    (session.pauseStartedAt === null || Number.isFinite(session.pauseStartedAt))
+  )
 }
