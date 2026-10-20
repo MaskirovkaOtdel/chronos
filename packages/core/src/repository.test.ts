@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { FocusSession } from './session.js'
 import { InMemorySessionRepository } from './testing/InMemorySessionRepository.js'
 import { makeFocusSession, makePersistedTimerState } from './testing/fixtures.js'
+import type { Mutable } from './testing/fixtures.js'
 
 /**
  * The repository is a *contract*, not a class: the localStorage and Firestore
@@ -81,7 +82,7 @@ describe('SessionRepository contract', () => {
 
       // `FocusSession` is readonly by type; the double must survive a caller
       // that goes around it, because a test fixture is not a security boundary.
-      const tampered = original as unknown as { label: string | null }
+      const tampered = original as Mutable<FocusSession>
       tampered.label = 'tampered'
 
       const [stored] = await repo.list()

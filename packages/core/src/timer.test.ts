@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest'
+import type { FocusSession } from './session.js'
 import type { Notifier } from './notifier.js'
 import { createTimer } from './timer.js'
-import type { SegmentSpec } from './timer.js'
+import type { SegmentSpec, Timer } from './timer.js'
+import { elapsedMs } from './elapsed.js'
 import { InMemorySessionRepository } from './testing/InMemorySessionRepository.js'
 import { ManualClock } from './testing/ManualClock.js'
+import type { Mutable } from './testing/fixtures.js'
 
 const FOCUS_25: SegmentSpec = {
   id: 's1',
@@ -32,6 +35,22 @@ function makeTimer(startAt = 0) {
     notifier: stubNotifier,
   })
   return { clock, timer }
+}
+
+/** The timer's live session, for tests that know one is running. */
+function activeSession(timer: Timer): FocusSession {
+  const { session } = timer.getState()
+  if (session === null) throw new Error('expected an active session')
+  return session
+}
+
+/** The instant the current pause began. */
+function pausedAt(timer: Timer): number {
+  const { session } = timer.getState()
+  if (session === null || session.pauseStartedAt === null) {
+    throw new Error('expected a paused session')
+  }
+  return session.pauseStartedAt
 }
 
 /**
@@ -163,6 +182,20 @@ describe('createTimer — the transition table', () => {
     })
   })
 
+  describe('a spec the domain does not admit', () => {
+    it('refuses a planned duration that is not a positive, finite number', () => {
+      const { timer } = makeTimer(1_000)
+
+      for (const plannedDurationMs of [0, -1, Number.NaN, Number.POSITIVE_INFINITY]) {
+        expect(() => timer.start({ ...FOCUS_25, plannedDurationMs })).toThrow(
+          'start() refused: plannedDurationMs must be a positive, finite number',
+        )
+      }
+
+      expect(timer.getState()).toEqual({ phase: 'idle', session: null })
+    })
+  })
+
   describe('snapshots', () => {
     it('a snapshot keeps describing the past after the next transition', () => {
       const { clock, timer } = makeTimer(1_000)
@@ -183,7 +216,7 @@ describe('createTimer — the transition table', () => {
       timer.start(FOCUS_25)
 
       const { session } = timer.getState()
-      const asCaller = session as unknown as { label: string | null }
+      const asCaller = session as Mutable<FocusSession>
 
       expect(() => {
         asCaller.label = 'tampered'
@@ -238,6 +271,44 @@ describe('createTimer — the transition table', () => {
       const { session } = timer.getState()
       expect(session?.accumulatedPausedMs).toBe(0)
       expect(session?.pauseStartedAt).toBeNull()
+    })
+
+    it('never moves the elapsed time across a pause and a resume', () => {
+      const { clock, timer } = makeTimer(0)
+      timer.start(FOCUS_25)
+      clock.advance(10_000)
+
+      expect(elapsedMs(activeSession(timer), 10_000)).toBe(10_000)
+
+      timer.pause()
+      clock.advance(60_000)
+      timer.resume()
+
+      // The minute spent paused is not work: the counter resumes where it was.
+      expect(elapsedMs(activeSession(timer), 70_000)).toBe(10_000)
+    })
+
+    it('records a pause that cannot have begun before the session did', () => {
+      // The clock stepping back past the start must not manufacture a pause
+      // that started before the work it interrupts: the pause tail would then
+      // swallow the whole session and the work would be unrecoverable.
+      const { clock, timer } = makeTimer(1_000_000)
+      timer.start(FOCUS_25)
+      clock.advance(600_000) // ten minutes of real work
+      clock.advance(-1_200_000) // the clock steps back past the start
+
+      timer.pause()
+
+      const session = activeSession(timer)
+      expect(pausedAt(timer)).toBeGreaterThanOrEqual(session.startedAt)
+      expect(pausedAt(timer)).toBeGreaterThanOrEqual(
+        session.startedAt + session.accumulatedPausedMs,
+      )
+
+      // And the work before the jump is not charged to the pause either.
+      clock.advance(200_000)
+      timer.resume()
+      expect(activeSession(timer).accumulatedPausedMs).toBe(0)
     })
   })
 })

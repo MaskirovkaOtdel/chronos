@@ -37,6 +37,17 @@ export function makeFocusSession(overrides: Partial<FocusSession> = {}): FocusSe
 }
 
 /**
+ * A mutable view of a readonly type.
+ *
+ * For tests that deliberately go around `readonly` to prove an implementation
+ * defends itself — a caller reaching through a snapshot to rewrite the timer
+ * it was only lent. Casting to `{ label: string | null }` would also work, but
+ * it throws away the type of the other ten fields with it, so a typo in the
+ * cast target passes silently. This keeps them checked.
+ */
+export type Mutable<T> = { -readonly [K in keyof T]: T[K] }
+
+/**
  * A `PersistedTimerState` for tests: idle, nothing run yet, first preset.
  *
  * A test that *has* run something overrides `completedFocusCount`; one that

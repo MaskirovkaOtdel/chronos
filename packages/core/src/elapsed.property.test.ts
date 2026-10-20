@@ -55,7 +55,14 @@ const sessionCoreArb: fc.Arbitrary<SessionCore> = fc.record({
 /** A paused session whose `pauseStartedAt` is known to be a real instant. */
 type PausedSession = FocusSession & { readonly pauseStartedAt: number }
 
-/** Any session the engine could have produced: paused, running, or never started. */
+/**
+ * A session the domain admits: paused, running, or just started.
+ *
+ * Deliberately *wider* than the engine can produce — `pauseAfterStart` may be
+ * smaller than the pauses already closed, a combination the timer refuses to
+ * create. A property should hold for states the engine would never hand out,
+ * not only for the ones it does.
+ */
 const sessionArb = sessionCoreArb.map((c) =>
   makeFocusSession({
     startedAt: c.startedAt,
@@ -78,6 +85,16 @@ const pausedArb: fc.Arbitrary<PausedSession> = sessionCoreArb.map((c) => {
     pauseStartedAt,
   }
 })
+
+/** Running: no pause in progress, though pauses may already have been closed. */
+const runningArb = sessionCoreArb.map((c) =>
+  makeFocusSession({
+    startedAt: c.startedAt,
+    accumulatedPausedMs: c.accumulatedPausedMs,
+    plannedDurationMs: c.plannedDurationMs,
+    pauseStartedAt: null,
+  }),
+)
 
 /** Nothing paused, ever: no tail and nothing accumulated. */
 const neverPausedArb = sessionCoreArb.map((c) =>
@@ -104,6 +121,22 @@ describe('elapsedMs — properties', () => {
         const earlier = session.startedAt + delta
         const later = earlier + advance
         expect(elapsedMs(session, later)).toBeGreaterThanOrEqual(elapsedMs(session, earlier))
+      }),
+    )
+  })
+
+  it('advances exactly with the wall clock while running', () => {
+    // Not merely monotonically — *exactly*. A countdown is real time, so a
+    // second of wall clock is a second of the bar. A formula that rounded,
+    // capped or counted a pause twice would still be monotone and would still
+    // satisfy the property above, which is why this one is here.
+    fc.assert(
+      fc.property(runningArb, duration, duration, (session, before, step) => {
+        // From a point where the floor cannot engage: the accumulated pause
+        // time has already been spent, so the session is not below zero.
+        const from = session.startedAt + session.accumulatedPausedMs + before
+        const to = from + step
+        expect(elapsedMs(session, to) - elapsedMs(session, from)).toBe(step)
       }),
     )
   })
