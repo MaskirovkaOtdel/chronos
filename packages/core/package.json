@@ -21,7 +21,8 @@
     "build": "tsc -b",
     "typecheck": "tsc -b",
     "test": "vitest run",
-    "clean": "tsc -b --clean"
+    "clean": "tsc -b --clean",
+    "coverage": "vitest run --coverage"
   },
   "devDependencies": {
     "fast-check": "^4.10.2"

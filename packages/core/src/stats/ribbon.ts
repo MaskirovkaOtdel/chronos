@@ -40,11 +40,12 @@ export function ribbonForDay(
   day: string,
 ): RibbonSegment[] {
   const todays = sessions.filter((session) => dayKey(session.startedAt, zone) === day)
-  if (todays.length === 0) return []
+  const first = todays[0]
+  if (first === undefined) return []
 
   // Any instant in the day gives the same day length ✓ — the day is 23 or 25
   // hours long twice a year ✓, and the ribbon has to know which.
-  const length = dayLengthMs(todays[0]?.startedAt ?? 0, zone)
+  const length = dayLengthMs(first.startedAt, zone)
   const segments: RibbonSegment[] = []
 
   for (const session of todays) {

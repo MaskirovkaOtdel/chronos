@@ -56,7 +56,13 @@ function partsIn(epochMs: number, zone: string): ZonedParts {
 
   const value = (type: Intl.DateTimeFormatPartTypes): string => {
     const part = parts.find((candidate) => candidate.type === type)
-    return part?.value ?? '0'
+    if (part === undefined) {
+      // The options above always ask for these parts, so a missing one means
+      // the formatter is not the one we think it is. Throwing beats silently
+      // producing "0-10-20" as a day key.
+      throw new Error(`the formatter did not return a "${type}" part`)
+    }
+    return part.value
   }
 
   return {
