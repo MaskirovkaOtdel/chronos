@@ -27,6 +27,7 @@ export { PRESETS, FOCUS_25, SHORT_BREAK, LONG_BREAK, findPreset } from './preset
 export type { Preset, FocusPreset, BreakPreset, AnyPreset } from './presets.js'
 export { nextSegmentAfterFinish } from './cycle.js'
 export type { NextSegment } from './cycle.js'
+export { isFocusSession, isPersistedTimerState } from './validation.js'
 export {
   notificationFor,
   shouldAskForPermission,
