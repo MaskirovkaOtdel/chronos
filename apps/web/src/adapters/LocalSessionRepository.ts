@@ -252,6 +252,13 @@ function parseRecord(raw: string | null): ParsedRecord {
   // Bracket access, not dot: `noPropertyAccessFromIndexSignature` is on, and
   // an envelope read is exactly the index-signature case it exists for.
   const version = record['schemaVersion']
+  // A record under our keys with *no* envelope at all is malformed, not
+  // foreign: every generation this app has ever written stamps the version,
+  // so its absence is damage. Reporting it as `unrecognized-version` would
+  // tell the user it was written by a newer build — a lie the day-4 UI would
+  // faithfully repeat. Anything present though not ours — 2, "1", null — is
+  // the foreign verdict: the record is intact, merely another generation.
+  if (version === undefined) return { outcome: 'damaged' }
   if (version !== SCHEMA_VERSION) return { outcome: 'unrecognized-version' }
   return { outcome: 'ok', fields: record }
 }

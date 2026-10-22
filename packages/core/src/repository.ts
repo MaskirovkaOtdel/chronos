@@ -39,6 +39,24 @@ export interface SessionListOptions {
  * cannot be implemented by either. Core would then have to branch on sync/async,
  * which is exactly the leak this boundary exists to prevent.
  *
+ * **Writes may reject; reads degrade rather than reject.** A write that cannot
+ * land — a full disk hitting the localStorage quota now, a network later — must
+ * propagate as a rejection. An implementation that swallows it produces a timer
+ * that appears to be saving while standing still, the worst of all outcomes:
+ * the UI's whole handling of a full disk rests on the rejection reaching it.
+ * When a write rejects, the backend keeps its previous value whole (`setItem`
+ * is atomic by specification) — never half a document. The engine's verbs
+ * mutate before they persist, so the transition has already happened in memory
+ * when the rejection arrives; announcing it is the caller's work, and the next
+ * successful write re-converges storage with memory (pinned by test, phase 4A
+ * day 2). Reads are the mirror image: one corrupted or unreadable record must
+ * not stop the app from opening, so a *corrupt* record reads as absent, and an
+ * implementation carrying that distinction — the localStorage adapter does —
+ * surfaces it through its own diagnostics rather than through this port, which
+ * deliberately does not grow a corruption channel. The line implementations
+ * must respect: only read-side corruption skims; transport and I/O errors
+ * reject.
+ *
  * **Return values belong to the caller.** `loadState()` and `list()` hand back
  * objects the caller owns: mutating one must not be able to reach into what the
  * implementation believes is stored. An implementation that caches its document

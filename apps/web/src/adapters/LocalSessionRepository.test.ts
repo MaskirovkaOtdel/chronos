@@ -191,6 +191,20 @@ describe('LocalSessionRepository — field-level validation', () => {
     expect(repo.skipped()).toEqual([{ key: 'chronos:session:sess-1', reason: 'damaged' }])
   })
 
+  it('skips a version-less record as damaged, not foreign — no generation of this app wrote one', async () => {
+    const repo = new LocalSessionRepository(window.localStorage)
+    window.localStorage.clear()
+
+    // A record under our keys carrying every field but the envelope. Nothing
+    // a newer build writes looks like this — newer builds stamp `2` — so this
+    // is ours, mangled, and the verdict must not accuse a version that does
+    // not exist of having written it.
+    window.localStorage.setItem('chronos:session:nameless', JSON.stringify(makeFocusSession()))
+
+    expect(await repo.list()).toEqual([])
+    expect(repo.skipped()).toEqual([{ key: 'chronos:session:nameless', reason: 'damaged' }])
+  })
+
   it('skips a v1 session whose kind is not one of the three', async () => {
     const repo = new LocalSessionRepository(window.localStorage)
     window.localStorage.clear()

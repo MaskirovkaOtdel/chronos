@@ -1,8 +1,11 @@
 # CHRONOS — data model
 
-> **Status:** design artifact — phase 1, day 10. **Nothing described here is implemented.**
-> The localStorage adapter lands in phase 4, Firebase in phase 5. The Firestore section is a
-> **written layout, deliberately not created**: no dependency, no collections, no rules, no
+> **Status:** designed phase 1 (day 10); **the localStorage half is now implemented** — the
+> adapter landed in phase 4A (days 1–2, commits `5fd03ed`/`84dc7dd`), along with the
+> record-shape guards (`validation.ts`, core) that enforce the type-fidelity rules below and the
+> skip-and-surface decision: a damaged record reads as absent **and is reported**, with `damaged`
+> kept distinct from `unrecognized-version` because they deserve different words. Firestore stays
+> a **written layout, deliberately not created**: no dependency, no collections, no rules, no
 > indexes exist yet. Designing the schema now is what stops phase 5 from retrofitting one.
 
 ## What persists, and what deliberately does not
@@ -121,6 +124,13 @@ hierarchy now is the part that cannot be bolted on afterwards.
 | `undefined`                  | key dropped by `JSON.stringify`                          | field ignored                         | Field vanishes, the type still says `number`, read fails at runtime. This is why every nullable field is `\| null` **and not optional** — the design already chose correctly; do not "simplify" it to `?`. |
 | `kind` enum                  | stored as a string, nothing checks it                    | stored as a string, nothing checks it | **Deserialization is a validation boundary.** Firestore validates types at write; localStorage validates nothing at all, so the same corruption fails eagerly in one backend and silently in the other.    |
 | Quota / limits               | ~5 MB per origin, shared                                 | 1 MB per document                     | Two different ceilings on the same data — see §Revisit.                                                                                                                                                    |
+
+**Enforced, not just designed (phase 4A day 2):** the first four rows are executable —
+`validation.ts` in core (`isFocusSession`/`isPersistedTimerState`) checks every field of every
+deserialized record for type and finiteness, the adapter validates the envelope before it, and a
+record failing either is skipped and reported rather than read as a wrong-typed object. The
+quota row's policy is also pinned: a failing write propagates and the engine keeps running in
+memory — the localStorage adapter's tests inject a refusing `Storage` for it.
 
 Epoch milliseconds are far inside double precision (~1.7e12 « 2^53), so both backends round-trip
 them exactly. That is not a reason to be casual about it: it is why `number` is safe to rely on.
