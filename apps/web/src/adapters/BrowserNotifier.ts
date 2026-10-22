@@ -119,7 +119,7 @@ export class BrowserNotifier implements Notifier {
 
     if (
       !shouldAskForPermission({
-        supported: true,
+        supported: this.supported,
         permission: platform.permission,
         hasAsked: this.#hasAsked,
       })

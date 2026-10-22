@@ -232,7 +232,7 @@ describe('BrowserNotifier', () => {
       expect(FakeNotificationPlatform.promptCount).toBe(0)
     })
 
-    it('a second ask in the same instance resolves null — the counter, not permission, stops the repeat', async () => {
+    it('a second ask in the same instance resolves null without a second prompt', async () => {
       const notifier = new BrowserNotifier(FakeNotificationPlatform)
 
       expect(await notifier.askForPermission()).toBe('granted')
